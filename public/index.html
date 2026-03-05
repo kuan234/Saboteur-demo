@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>矮人矿坑 - 测试大厅</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        #game-board { display: none; margin-top: 20px; padding: 15px; border: 2px solid #333; }
+        .card { display: inline-block; padding: 10px; margin: 5px; background: #eee; border: 1px solid #999; }
+    </style>
+</head>
+<body>
+    <h1>矮人矿坑测试</h1>
+    <p>当前房间人数: <span id="player-count">0</span>/10</p>
+    
+    <button id="start-btn" onclick="startGame()">分配身份与发牌</button>
+
+    <div id="game-board">
+        <h2>你的隐藏身份: <span id="my-role" style="color: red;"></span></h2>
+        <h3>你的手牌:</h3>
+        <div id="my-hand"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io(); // 连接到服务器
+
+        // 监听房间人数变化
+        socket.on('playerJoined', (data) => {
+            document.getElementById('player-count').innerText = data.playerCount;
+        });
+        socket.on('playerLeft', (data) => {
+            document.getElementById('player-count').innerText = data.playerCount;
+        });
+
+        // 告诉服务器：我们要开始游戏了
+        function startGame() {
+            socket.emit('requestStartGame');
+        }
+
+        // 接收服务器发来的游戏初始数据
+        socket.on('gameStarted', (data) => {
+            document.getElementById('game-board').style.display = 'block';
+            document.getElementById('my-role').innerText = data.yourRole; // 显示身份
+            
+            // 显示手牌
+            const handDiv = document.getElementById('my-hand');
+            handDiv.innerHTML = ''; 
+            data.yourHand.forEach(card => {
+                const cardSpan = document.createElement('span');
+                cardSpan.className = 'card';
+                cardSpan.innerText = `${card.type} (${card.id})`;
+                handDiv.appendChild(cardSpan);
+            });
+        });
+    </script>
+</body>
+</html>
