@@ -50,6 +50,8 @@
     <div id="player-area">
         <div>你的隐藏身份: <span id="my-role" class="role-text"></span></div>
         <div id="turn-status" style="color: #f1c40f; font-size: 1.2em; font-weight: bold; margin-top: 10px;">等待游戏开始...</div>
+        <div id="turn-status" style="color: #f1c40f; font-size: 1.2em; font-weight: bold; margin-top: 10px;">等待游戏开始...</div>
+        <button id="discard-btn" onclick="discardSelectedCard()" style="display:none; background: #c0392b; margin-top: 10px;">🗑️ 弃掉选中的牌 (Pass)</button>
         <div id="my-hand"></div>
     </div>
 
@@ -61,6 +63,17 @@
         socket.on('playerLeft', data => document.getElementById('player-count').innerText = data.playerCount);
 
         function startGame() { socket.emit('requestStartGame'); }
+        function discardSelectedCard() {
+            if (!selectedCard) return;
+            if(confirm(`确定要弃掉 [${selectedCard.id}] 并且跳过本回合吗？`)) {
+                socket.emit('discardCard', { card: selectedCard });
+                
+                // 清理前端状态
+                selectedCard = null;
+                document.getElementById('discard-btn').style.display = 'none';
+                document.querySelectorAll('.hand-card').forEach(c => c.classList.remove('selected'));
+            }
+        }
 
         let myTurn = true; // 暂时先假设可以随便放牌，之后由服务器控制
         let selectedCard = null; // 当前选中的卡牌
@@ -80,12 +93,12 @@
                 
                 // 点击选中卡牌
                 cardDiv.onclick = () => {
-                    // 取消其他卡牌的选中状态
                     document.querySelectorAll('.hand-card').forEach(c => c.classList.remove('selected'));
-                    // 选中当前卡牌
                     cardDiv.classList.add('selected');
                     selectedCard = card; 
-                    console.log("选中了卡牌:", selectedCard);
+                    
+                    // 👇 新加这行：选中牌后，显示弃牌按钮 👇
+                    document.getElementById('discard-btn').style.display = 'inline-block';
                 };
                 
                 handDiv.appendChild(cardDiv);

@@ -101,12 +101,12 @@ io.on('connection', (socket) => {
 
     socket.on('requestStartGame', () => startGame());
 
-    // 👇👇👇 就是漏了这一大段！接收玩家出牌的指令 👇👇👇
+    // 监听玩家出牌动作 (加入了严格的规则校验)
     socket.on('playCard', (data) => {
         const playerIndex = players.findIndex(p => p.id === socket.id);
         const player = players[playerIndex];
 
-        // 1. 规则校验：检查是不是轮到你出牌
+        // 1. 检查是不是轮到你
         if (playerIndex !== currentPlayerIndex) {
             socket.emit('errorMsg', '还没轮到你出牌哦！');
             return;
@@ -115,34 +115,67 @@ io.on('connection', (socket) => {
         const { card, targetX, targetY } = data;
         const coord = `${targetX},${targetY}`;
 
-        // 2. 规则校验：检查格子上是不是已经有牌了
-        if (board[coord]) {
-            socket.emit('errorMsg', '这个位置已经有卡牌了！');
+        // 2. 规则校验：行动卡绝对不能放在地图上！
+        if (card.type === 'action') {
+            socket.emit('errorMsg', '行动卡不能铺在桌面上！请选择道路卡。');
             return;
         }
 
-        // 3. 把牌放到桌面上
-        board[coord] = { type: card.type, name: card.id, faceUp: true };
-
-        // 4. 从玩家手牌中扣除这张牌
-        player.hand = player.hand.filter(c => c.id !== card.id);
-
-        // 5. 摸一张新牌补充手牌
-        if (deck.length > 0) {
-            player.hand.push(deck.pop());
+        // 3. 规则校验：格子上是不是已经有牌了
+        if (board[coord]) {
+            socket.emit('errorMsg', '这个位置已经被占用了！');
+            return;
         }
 
-        // 6. 切换到下一个玩家
+        // 4. 规则校验：新放的牌必须挨着桌上已有的牌 (上下左右至少有一个邻居)
+        const hasNeighbor = board[`${targetX + 1},${targetY}`] || 
+                            board[`${targetX - 1},${targetY}`] || 
+                            board[`${targetX},${targetY + 1}`] || 
+                            board[`${targetX},${targetY - 1}`];
+        if (!hasNeighbor) {
+            socket.emit('errorMsg', '违章建筑！新放的道路必须与桌上已有的卡牌相邻！');
+            return;
+        }
+
+        // 5. 放牌到桌面
+        board[coord] = { type: card.type, name: card.id, faceUp: true };
+
+        // 6. 扣除手牌并摸新牌
+        player.hand = player.hand.filter(c => c.id !== card.id);
+        if (deck.length > 0) player.hand.push(deck.pop());
+
+        // 7. 切换回合
         currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
 
-        // 7. 通知所有人：桌面更新了，回合也切换了
+        // 8. 广播更新
         io.emit('boardUpdated', board);
         io.emit('turnUpdated', { currentTurnId: players[currentPlayerIndex].id });
-
-        // 8. 单独把最新的手牌发给刚才出牌的玩家
         socket.emit('handUpdated', { yourHand: player.hand });
     });
-    // 👆👆👆 漏掉的代码到这里结束 👆👆👆
+
+    // 👇👇👇 新增：监听玩家弃牌 (Pass) 👇👇👇
+    socket.on('discardCard', (data) => {
+        const playerIndex = players.findIndex(p => p.id === socket.id);
+        const player = players[playerIndex];
+
+        if (playerIndex !== currentPlayerIndex) {
+            socket.emit('errorMsg', '还没轮到你操作哦！');
+            return;
+        }
+
+        // 扣除弃掉的牌
+        player.hand = player.hand.filter(c => c.id !== data.card.id);
+        
+        // 摸一张新牌
+        if (deck.length > 0) player.hand.push(deck.pop());
+
+        // 切换回合
+        currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+
+        // 广播并刷新
+        io.emit('turnUpdated', { currentTurnId: players[currentPlayerIndex].id });
+        socket.emit('handUpdated', { yourHand: player.hand });
+    });
 
     socket.on('disconnect', () => {
         players = players.filter(p => p.id !== socket.id);
