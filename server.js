@@ -83,7 +83,7 @@ function startGame() {
     }
     // 生成 27 张行动卡 (用锤子表情代替)
     for (let i = 0; i < 27; i++) {
-        deck.push({ type: 'action', name: '🔨行动', id: `action_${i}` });
+        deck.push({ type: 'action', name: '行动', id: `action_${i}` });
     }
     deck = shuffle(deck);
 
