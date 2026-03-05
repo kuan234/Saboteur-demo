@@ -164,10 +164,47 @@ io.on('connection', (socket) => {
         board[coord] = { type: card.type, name: card.name, dirs: card.dirs, faceUp: true };
         player.hand = player.hand.filter(c => c.id !== card.id);
         if (deck.length > 0) player.hand.push(deck.pop());
-        currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+
+        // --- 👇 新增：检查是否挖到了终点 👇 ---
+        let gameEnded = false;
+        // 辅助函数：检查放置新牌后，四周有没有碰到终点卡
+        const checkGoal = (nx, ny, myDirIndex) => {
+            const gCoord = `${nx},${ny}`;
+            const gCard = board[gCoord];
+            // 如果碰到了还没翻开的终点卡，并且我的管道口是通向它的 (1代表通)
+            if (gCard && gCard.type === 'goal' && !gCard.faceUp && card.dirs[myDirIndex] === 1) {
+                gCard.faceUp = true; // 翻开终点卡
+                if (gCard.isTreasure) {
+                    gCard.name = '💎'; // 变成钻石/金块图标
+                    io.emit('gameOver', { winners: 'Gold Miner', msg: '🎉 恭喜！挖到了宝藏！【淘金者】阵营获胜！' });
+                    gameEnded = true;
+                } else {
+                    gCard.name = '🪨'; // 变成石头图标
+                    io.emit('gameMsg', '哎呀，挖开是个石头！继续找！');
+                }
+            }
+        };
+
+        checkGoal(targetX, targetY - 1, 0); // 检查上方
+        checkGoal(targetX + 1, targetY, 1); // 检查右侧
+        checkGoal(targetX, targetY + 1, 2); // 检查下方
+        checkGoal(targetX - 1, targetY, 3); // 检查左侧
+        // --- 👆 终点检查结束 👆 ---
+
+        // 检查是不是所有人都没牌了 (牌堆抽空 + 手牌打光 = 破坏者赢)
+        const allHandsEmpty = players.every(p => p.hand.length === 0);
+        if (allHandsEmpty && !gameEnded) {
+            io.emit('gameOver', { winners: 'Saboteur', msg: '😈 所有牌已耗尽，未能挖到宝藏！【破坏者】阵营获胜！' });
+            gameEnded = true;
+        }
+
+        // 如果游戏还没结束，才切换回合
+        if (!gameEnded) {
+            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+            io.emit('turnUpdated', { currentTurnId: players[currentPlayerIndex].id });
+        }
 
         io.emit('boardUpdated', board);
-        io.emit('turnUpdated', { currentTurnId: players[currentPlayerIndex].id });
         socket.emit('handUpdated', { yourHand: player.hand });
     });
 
@@ -178,8 +215,16 @@ io.on('connection', (socket) => {
 
         player.hand = player.hand.filter(c => c.id !== data.card.id);
         if (deck.length > 0) player.hand.push(deck.pop());
-        currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
 
+        // --- 新增：弃牌后也要检查是不是所有人手牌耗尽 ---
+        const allHandsEmpty = players.every(p => p.hand.length === 0);
+        if (allHandsEmpty) {
+            io.emit('gameOver', { winners: 'Saboteur', msg: '😈 所有牌已耗尽，未能挖到宝藏！【破坏者】阵营获胜！' });
+            socket.emit('handUpdated', { yourHand: player.hand });
+            return;
+        }
+
+        currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
         io.emit('turnUpdated', { currentTurnId: players[currentPlayerIndex].id });
         socket.emit('handUpdated', { yourHand: player.hand });
     });

@@ -100,7 +100,11 @@
                 cardEl.innerHTML = `<div class="card-symbol">${card.name}</div>`;
                 
                 if (card.type === 'start') cardEl.className = 'card board-card start-card';
-                else if (card.type === 'goal') { cardEl.className = 'card board-card goal-card'; cardEl.innerHTML = `<div class="card-symbol">?</div>`; }
+                else if (card.type === 'goal') { 
+                    cardEl.className = 'card board-card goal-card'; 
+                    // 如果 faceUp 是 true，就显示 💎 或 🪨，否则显示 ?
+                    cardEl.innerHTML = `<div class="card-symbol">${card.faceUp ? card.name : '?'}</div>`; 
+                }
                 else cardEl.className = 'card board-card'; 
                 
                 boardGrid.appendChild(cardEl);
@@ -131,6 +135,18 @@
         }
 
         socket.on('errorMsg', msg => alert(msg));
+        socket.on('gameMsg', msg => alert(msg)); // 接收普通消息 (比如挖到了石头)
+        
+        // 接收游戏结束消息
+        socket.on('gameOver', data => {
+            alert(data.msg);
+            const statusDiv = document.getElementById('turn-status');
+            statusDiv.innerText = "游戏结束：" + data.msg;
+            statusDiv.style.color = data.winners === 'Gold Miner' ? "#2ecc71" : "#e74c3c";
+            // 锁定桌面，不允许再放牌
+            document.getElementById('board-grid').onclick = null; 
+            document.getElementById('discard-btn').style.display = 'none';
+        });
         socket.on('boardUpdated', newBoard => renderBoard(newBoard));
         socket.on('handUpdated', data => renderHand(data.yourHand));
         socket.on('turnUpdated', data => {
