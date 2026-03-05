@@ -101,6 +101,49 @@ io.on('connection', (socket) => {
 
     socket.on('requestStartGame', () => startGame());
 
+    // 👇👇👇 就是漏了这一大段！接收玩家出牌的指令 👇👇👇
+    socket.on('playCard', (data) => {
+        const playerIndex = players.findIndex(p => p.id === socket.id);
+        const player = players[playerIndex];
+
+        // 1. 规则校验：检查是不是轮到你出牌
+        if (playerIndex !== currentPlayerIndex) {
+            socket.emit('errorMsg', '还没轮到你出牌哦！');
+            return;
+        }
+
+        const { card, targetX, targetY } = data;
+        const coord = `${targetX},${targetY}`;
+
+        // 2. 规则校验：检查格子上是不是已经有牌了
+        if (board[coord]) {
+            socket.emit('errorMsg', '这个位置已经有卡牌了！');
+            return;
+        }
+
+        // 3. 把牌放到桌面上
+        board[coord] = { type: card.type, name: card.id, faceUp: true };
+
+        // 4. 从玩家手牌中扣除这张牌
+        player.hand = player.hand.filter(c => c.id !== card.id);
+
+        // 5. 摸一张新牌补充手牌
+        if (deck.length > 0) {
+            player.hand.push(deck.pop());
+        }
+
+        // 6. 切换到下一个玩家
+        currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+
+        // 7. 通知所有人：桌面更新了，回合也切换了
+        io.emit('boardUpdated', board);
+        io.emit('turnUpdated', { currentTurnId: players[currentPlayerIndex].id });
+
+        // 8. 单独把最新的手牌发给刚才出牌的玩家
+        socket.emit('handUpdated', { yourHand: player.hand });
+    });
+    // 👆👆👆 漏掉的代码到这里结束 👆👆👆
+
     socket.on('disconnect', () => {
         players = players.filter(p => p.id !== socket.id);
         io.emit('playerLeft', { playerCount: players.length });
