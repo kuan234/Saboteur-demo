@@ -49,6 +49,7 @@
 
     <div id="player-area">
         <div>你的隐藏身份: <span id="my-role" class="role-text"></span></div>
+        <div id="turn-status" style="color: #f1c40f; font-size: 1.2em; font-weight: bold; margin-top: 10px;">等待游戏开始...</div>
         <div id="my-hand"></div>
     </div>
 
@@ -145,7 +146,64 @@
                     document.querySelectorAll('.hand-card').forEach(c => c.classList.remove('selected'));
                 }
             };
+            
         });
+        // 监听报错信息
+        socket.on('errorMsg', (msg) => {
+            alert(msg);
+        });
+
+        // 监听回合更新
+        socket.on('turnUpdated', (data) => {
+            const statusDiv = document.getElementById('turn-status');
+            if (data.currentTurnId === socket.id) {
+                statusDiv.innerText = "👉 现在轮到你出牌了！";
+                statusDiv.style.color = "#2ecc71"; // 绿色
+            } else {
+                statusDiv.innerText = "⏳ 等待其他玩家出牌...";
+                statusDiv.style.color = "#e74c3c"; // 红色
+            }
+        });
+
+        // 监听桌面更新 (有人打牌了)
+        socket.on('boardUpdated', (newBoard) => {
+            // 我们复用之前写好的渲染逻辑
+            const boardGrid = document.getElementById('board-grid');
+            boardGrid.innerHTML = '';
+            const baseX = 100, baseY = 350, cardWidth = 80, cardHeight = 110; 
+
+            for (const [coord, card] of Object.entries(newBoard)) {
+                const [x, y] = coord.split(',').map(Number);
+                const cardEl = document.createElement('div');
+                cardEl.style.left = `${baseX + x * cardWidth}px`;
+                cardEl.style.top = `${baseY + y * cardHeight}px`;
+                cardEl.innerText = card.name;
+                
+                if (card.type === 'start') cardEl.className = 'card board-card start-card';
+                else if (card.type === 'goal') cardEl.className = 'card board-card goal-card';
+                else cardEl.className = 'card board-card'; 
+                
+                boardGrid.appendChild(cardEl);
+            }
+        });
+
+        // 监听手牌更新 (自己打完牌后抽了新牌)
+        socket.on('handUpdated', (data) => {
+            const handDiv = document.getElementById('my-hand');
+            handDiv.innerHTML = ''; 
+            data.yourHand.forEach(card => {
+                const cardDiv = document.createElement('div');
+                cardDiv.className = 'card hand-card';
+                cardDiv.innerText = card.id;
+                cardDiv.onclick = () => {
+                    document.querySelectorAll('.hand-card').forEach(c => c.classList.remove('selected'));
+                    cardDiv.classList.add('selected');
+                    selectedCard = card; 
+                };
+                handDiv.appendChild(cardDiv);
+            });
+        });
+        
     </script>
 </body>
 </html>

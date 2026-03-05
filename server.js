@@ -1,3 +1,4 @@
+let currentPlayerIndex = 0; // 记录现在轮到第几个玩家出牌
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -88,6 +89,10 @@ function startGame() {
             board: board
         });
     });
+
+    // 👇👇👇 请把代码加在这里！(在上面这段代码的下面，大括号 } 的上面) 👇👇👇
+    currentPlayerIndex = 0; // 重置回合
+    io.emit('turnUpdated', { currentTurnId: players[currentPlayerIndex].id });
 }
 
 io.on('connection', (socket) => {
