@@ -1,4 +1,4 @@
-let currentPlayerIndex = 0; // 记录现在轮到第几个玩家出牌
+let currentPlayerIndex = 0;
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -12,7 +12,7 @@ app.use(express.static('public'));
 let players = []; 
 let deck = [];    
 let setAsideRoleCard = null;
-let board = {}; // 存储桌上的卡牌，格式 { 'x,y': cardData }
+let board = {}; 
 
 function shuffle(array) {
     for (let i = array.length - 1; i > 0; i--) {
@@ -40,58 +40,63 @@ function getRoleDeck(playerCount) {
     return shuffle(roleDeck); 
 }
 
+// 核心：定义卡牌的四个接口 [上, 右, 下, 左]。1代表通，0代表死路。
+const pathTemplates = [
+    { type: 'path', name: '╋', dirs: [1, 1, 1, 1] },
+    { type: 'path', name: '┃', dirs: [1, 0, 1, 0] },
+    { type: 'path', name: '━', dirs: [0, 1, 0, 1] },
+    { type: 'path', name: '┳', dirs: [0, 1, 1, 1] },
+    { type: 'path', name: '┻', dirs: [1, 1, 0, 1] },
+    { type: 'path', name: '┣', dirs: [1, 1, 1, 0] },
+    { type: 'path', name: '┫', dirs: [1, 0, 1, 1] },
+    { type: 'path', name: '┏', dirs: [0, 1, 1, 0] },
+    { type: 'path', name: '┓', dirs: [0, 0, 1, 1] },
+    { type: 'path', name: '┗', dirs: [1, 1, 0, 0] },
+    { type: 'path', name: '┛', dirs: [1, 0, 0, 1] }
+];
+
 function startGame() {
     const playerCount = players.length;
     if (playerCount < 3 || playerCount > 10) return;
 
-    // 1. 发身份
     const roleDeck = getRoleDeck(playerCount);
-    players.forEach(player => {
-        player.role = roleDeck.pop();
-        player.hand = [];
-    });
+    players.forEach(player => { player.role = roleDeck.pop(); player.hand = []; });
     setAsideRoleCard = roleDeck.pop();
 
-    // 2. 初始化桌面地图 (起点和3个终点)
     board = {};
-    board['0,0'] = { type: 'start', faceUp: true, name: '起点' };
+    // 起点卡四个方向都通
+    board['0,0'] = { type: 'start', name: '梯', dirs: [1,1,1,1], faceUp: true };
     
-    // 准备终点卡：1个宝藏，2个石头
     let goals = [
-        { type: 'goal', faceUp: false, isTreasure: true, name: '终点(隐藏)' },
-        { type: 'goal', faceUp: false, isTreasure: false, name: '终点(隐藏)' },
-        { type: 'goal', faceUp: false, isTreasure: false, name: '终点(隐藏)' }
+        { type: 'goal', faceUp: false, isTreasure: true, name: '终点' },
+        { type: 'goal', faceUp: false, isTreasure: false, name: '终点' },
+        { type: 'goal', faceUp: false, isTreasure: false, name: '终点' }
     ];
     goals = shuffle(goals);
-    
-    // 根据规则，距离起点7个卡牌宽度放置终点，上下各隔开一张卡的距离
-    board['8,-2'] = goals[0];
-    board['8,0'] = goals[1];
-    board['8,2'] = goals[2];
+    board['8,-2'] = goals[0]; board['8,0'] = goals[1]; board['8,2'] = goals[2];
 
-    // 3. 生成手牌并洗牌
     deck = [];
-    for (let i = 0; i < 40; i++) deck.push({ type: 'path', id: `道路_${i}` });
-    for (let i = 0; i < 27; i++) deck.push({ type: 'action', id: `行动_${i}` });
+    // 随机生成 40 张具体的带形状的路线卡
+    for (let i = 0; i < 40; i++) {
+        let tmpl = pathTemplates[Math.floor(Math.random() * pathTemplates.length)];
+        deck.push({ ...tmpl, id: `path_${i}` });
+    }
+    // 生成 27 张行动卡 (用锤子表情代替)
+    for (let i = 0; i < 27; i++) {
+        deck.push({ type: 'action', name: '🔨行动', id: `action_${i}` });
+    }
     deck = shuffle(deck);
 
-    // 4. 发牌
     let cardsPerPlayer = (playerCount >= 3 && playerCount <= 5) ? 6 : (playerCount >= 6 && playerCount <= 7) ? 5 : 4;
     for (let i = 0; i < cardsPerPlayer; i++) {
         players.forEach(player => { if (deck.length > 0) player.hand.push(deck.pop()); });
     }
 
-    // 5. 将数据发给前端 (加入 board 数据)
     players.forEach(player => {
-        io.to(player.id).emit('gameStarted', {
-            yourRole: player.role,
-            yourHand: player.hand,
-            board: board
-        });
+        io.to(player.id).emit('gameStarted', { yourRole: player.role, yourHand: player.hand, board: board });
     });
 
-    // 👇👇👇 请把代码加在这里！(在上面这段代码的下面，大括号 } 的上面) 👇👇👇
-    currentPlayerIndex = 0; // 重置回合
+    currentPlayerIndex = 0;
     io.emit('turnUpdated', { currentTurnId: players[currentPlayerIndex].id });
 }
 
@@ -101,78 +106,80 @@ io.on('connection', (socket) => {
 
     socket.on('requestStartGame', () => startGame());
 
-    // 监听玩家出牌动作 (加入了严格的规则校验)
     socket.on('playCard', (data) => {
         const playerIndex = players.findIndex(p => p.id === socket.id);
         const player = players[playerIndex];
 
-        // 1. 检查是不是轮到你
-        if (playerIndex !== currentPlayerIndex) {
-            socket.emit('errorMsg', '还没轮到你出牌哦！');
-            return;
-        }
+        if (playerIndex !== currentPlayerIndex) { socket.emit('errorMsg', '还没轮到你出牌！'); return; }
 
         const { card, targetX, targetY } = data;
         const coord = `${targetX},${targetY}`;
 
-        // 2. 规则校验：行动卡绝对不能放在地图上！
-        if (card.type === 'action') {
-            socket.emit('errorMsg', '行动卡不能铺在桌面上！请选择道路卡。');
-            return;
+        if (card.type === 'action') { socket.emit('errorMsg', '行动卡不能铺在桌面上！'); return; }
+        if (board[coord]) { socket.emit('errorMsg', '位置被占用了！'); return; }
+
+        // --- 核心：连通性判定算法 ---
+        const targetDirs = card.dirs; // 新卡的四个接口 [上, 右, 下, 左]
+        const neighbors = {
+            top: board[`${targetX},${targetY - 1}`],
+            right: board[`${targetX + 1},${targetY}`],
+            bottom: board[`${targetX},${targetY + 1}`],
+            left: board[`${targetX - 1},${targetY}`]
+        };
+
+        let hasNeighbor = false;
+        let validMatch = true;
+        let connectToPath = false;
+
+        // 检查上方邻居 (它的下接口 dirs[2] 必须和我的上接口 dirs[0] 匹配)
+        if (neighbors.top && neighbors.top.dirs) {
+            hasNeighbor = true;
+            if (neighbors.top.dirs[2] !== targetDirs[0]) validMatch = false;
+            if (neighbors.top.dirs[2] === 1 && targetDirs[0] === 1) connectToPath = true;
+        }
+        // 检查右侧邻居 (它的左接口 dirs[3] 必须和我的右接口 dirs[1] 匹配)
+        if (neighbors.right && neighbors.right.dirs) {
+            hasNeighbor = true;
+            if (neighbors.right.dirs[3] !== targetDirs[1]) validMatch = false;
+            if (neighbors.right.dirs[3] === 1 && targetDirs[1] === 1) connectToPath = true;
+        }
+        // 检查下方邻居 (它的上接口 dirs[0] 必须和我的下接口 dirs[2] 匹配)
+        if (neighbors.bottom && neighbors.bottom.dirs) {
+            hasNeighbor = true;
+            if (neighbors.bottom.dirs[0] !== targetDirs[2]) validMatch = false;
+            if (neighbors.bottom.dirs[0] === 1 && targetDirs[2] === 1) connectToPath = true;
+        }
+        // 检查左侧邻居 (它的右接口 dirs[1] 必须和我的左接口 dirs[3] 匹配)
+        if (neighbors.left && neighbors.left.dirs) {
+            hasNeighbor = true;
+            if (neighbors.left.dirs[1] !== targetDirs[3]) validMatch = false;
+            if (neighbors.left.dirs[1] === 1 && targetDirs[3] === 1) connectToPath = true;
         }
 
-        // 3. 规则校验：格子上是不是已经有牌了
-        if (board[coord]) {
-            socket.emit('errorMsg', '这个位置已经被占用了！');
-            return;
-        }
+        if (!hasNeighbor) { socket.emit('errorMsg', '违章建筑！必须挨着已有的卡牌放！'); return; }
+        if (!validMatch) { socket.emit('errorMsg', '放不进去！管道接口对不上！'); return; }
+        if (!connectToPath) { socket.emit('errorMsg', '死路！你必须至少连接一条现有的通路！'); return; }
 
-        // 4. 规则校验：新放的牌必须挨着桌上已有的牌 (上下左右至少有一个邻居)
-        const hasNeighbor = board[`${targetX + 1},${targetY}`] || 
-                            board[`${targetX - 1},${targetY}`] || 
-                            board[`${targetX},${targetY + 1}`] || 
-                            board[`${targetX},${targetY - 1}`];
-        if (!hasNeighbor) {
-            socket.emit('errorMsg', '违章建筑！新放的道路必须与桌上已有的卡牌相邻！');
-            return;
-        }
-
-        // 5. 放牌到桌面
-        board[coord] = { type: card.type, name: card.id, faceUp: true };
-
-        // 6. 扣除手牌并摸新牌
+        // 校验通过，放牌！
+        board[coord] = { type: card.type, name: card.name, dirs: card.dirs, faceUp: true };
         player.hand = player.hand.filter(c => c.id !== card.id);
         if (deck.length > 0) player.hand.push(deck.pop());
-
-        // 7. 切换回合
         currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
 
-        // 8. 广播更新
         io.emit('boardUpdated', board);
         io.emit('turnUpdated', { currentTurnId: players[currentPlayerIndex].id });
         socket.emit('handUpdated', { yourHand: player.hand });
     });
 
-    // 👇👇👇 新增：监听玩家弃牌 (Pass) 👇👇👇
     socket.on('discardCard', (data) => {
         const playerIndex = players.findIndex(p => p.id === socket.id);
         const player = players[playerIndex];
+        if (playerIndex !== currentPlayerIndex) { socket.emit('errorMsg', '还没轮到你！'); return; }
 
-        if (playerIndex !== currentPlayerIndex) {
-            socket.emit('errorMsg', '还没轮到你操作哦！');
-            return;
-        }
-
-        // 扣除弃掉的牌
         player.hand = player.hand.filter(c => c.id !== data.card.id);
-        
-        // 摸一张新牌
         if (deck.length > 0) player.hand.push(deck.pop());
-
-        // 切换回合
         currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
 
-        // 广播并刷新
         io.emit('turnUpdated', { currentTurnId: players[currentPlayerIndex].id });
         socket.emit('handUpdated', { yourHand: player.hand });
     });
