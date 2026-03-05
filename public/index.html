@@ -26,6 +26,10 @@
         #my-hand { display: flex; gap: 10px; margin-top: 10px; }
         .hand-card { transition: transform 0.2s; }
         .hand-card:hover { transform: translateY(-10px); background: #f1c40f; border-color: #f39c12; }
+        /* 选中的手牌样式 */
+        .hand-card.selected { transform: translateY(-20px); background: #f1c40f; border: 3px solid #e74c3c; box-shadow: 0 0 15px rgba(231, 76, 60, 0.8); }
+        /* 桌面悬停效果，提示可以放牌 */
+        .grid-container { cursor: crosshair; }
         .role-text { color: #e74c3c; font-size: 1.2em; font-weight: bold; }
     </style>
 </head>
@@ -57,49 +61,90 @@
 
         function startGame() { socket.emit('requestStartGame'); }
 
+        let myTurn = true; // 暂时先假设可以随便放牌，之后由服务器控制
+        let selectedCard = null; // 当前选中的卡牌
+
         socket.on('gameStarted', (data) => {
             document.getElementById('tabletop').style.display = 'block';
             document.getElementById('player-area').style.display = 'block';
             document.getElementById('my-role').innerText = data.yourRole;
             
-            // 渲染手牌
+            // --- 1. 渲染手牌并加入点击事件 ---
             const handDiv = document.getElementById('my-hand');
             handDiv.innerHTML = ''; 
             data.yourHand.forEach(card => {
                 const cardDiv = document.createElement('div');
                 cardDiv.className = 'card hand-card';
                 cardDiv.innerText = card.id;
+                
+                // 点击选中卡牌
+                cardDiv.onclick = () => {
+                    // 取消其他卡牌的选中状态
+                    document.querySelectorAll('.hand-card').forEach(c => c.classList.remove('selected'));
+                    // 选中当前卡牌
+                    cardDiv.classList.add('selected');
+                    selectedCard = card; 
+                    console.log("选中了卡牌:", selectedCard);
+                };
+                
                 handDiv.appendChild(cardDiv);
             });
 
-            // 渲染桌面地图 (将网格坐标转换为像素像素位置)
+            // --- 2. 渲染桌面并加入网格点击事件 ---
             const boardGrid = document.getElementById('board-grid');
             boardGrid.innerHTML = '';
-            // 设定基准点 (让起点显示在屏幕中间偏左)
+            
             const baseX = 100; 
             const baseY = 350;
-            const cardWidth = 80;  // 70px宽度 + 10px间距
-            const cardHeight = 110; // 100px高度 + 10px间距
+            const cardWidth = 80;  
+            const cardHeight = 110; 
 
+            // 渲染已有的卡牌
             for (const [coord, card] of Object.entries(data.board)) {
                 const [x, y] = coord.split(',').map(Number);
                 const cardEl = document.createElement('div');
-                
-                // 计算在屏幕上的绝对位置
                 cardEl.style.left = `${baseX + x * cardWidth}px`;
                 cardEl.style.top = `${baseY + y * cardHeight}px`;
-                
                 cardEl.innerText = card.name;
                 
-                if (card.type === 'start') {
-                    cardEl.className = 'card board-card start-card';
-                } else if (card.type === 'goal') {
-                    cardEl.className = 'card board-card goal-card';
-                    cardEl.innerText += '\n?'; // 背面朝上
-                }
+                if (card.type === 'start') cardEl.className = 'card board-card start-card';
+                else if (card.type === 'goal') cardEl.className = 'card board-card goal-card';
+                else cardEl.className = 'card board-card'; // 普通道路卡
                 
                 boardGrid.appendChild(cardEl);
             }
+
+            // --- 3. 监听桌面点击，计算坐标 ---
+            boardGrid.onclick = (event) => {
+                if (!selectedCard) {
+                    alert("请先在下方选中一张手牌！");
+                    return;
+                }
+                
+                // 获取点击位置相对于 grid-container 的坐标
+                const rect = boardGrid.getBoundingClientRect();
+                const clickX = event.clientX - rect.left;
+                const clickY = event.clientY - rect.top;
+
+                // 反向推算出网格坐标 (x, y)
+                // 公式：(点击位置 - 基础偏移) / 卡牌尺寸，然后四舍五入到最近的整数
+                const gridX = Math.round((clickX - baseX) / cardWidth);
+                const gridY = Math.round((clickY - baseY) / cardHeight);
+
+                // 弹出确认框（测试用）
+                if(confirm(`你要把 [${selectedCard.id}] 放在坐标 (${gridX}, ${gridY}) 吗？`)) {
+                    // 告诉服务器：我要出牌！
+                    socket.emit('playCard', { 
+                        card: selectedCard, 
+                        targetX: gridX, 
+                        targetY: gridY 
+                    });
+                    
+                    // 出完牌后取消选中状态
+                    selectedCard = null;
+                    document.querySelectorAll('.hand-card').forEach(c => c.classList.remove('selected'));
+                }
+            };
         });
     </script>
 </body>
