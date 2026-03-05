@@ -2,56 +2,104 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <title>矮人矿坑 - 测试大厅</title>
+    <title>矮人矿坑 - 游戏大厅</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        #game-board { display: none; margin-top: 20px; padding: 15px; border: 2px solid #333; }
-        .card { display: inline-block; padding: 10px; margin: 5px; background: #eee; border: 1px solid #999; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #2c3e50; color: white; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; }
+        .header { display: flex; justify-content: space-between; align-items: center; background: #34495e; padding: 10px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        button { background: #e67e22; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #d35400; }
+        
+        /* 游戏桌面区 */
+        #tabletop { flex: 1; background-color: #3e2723; margin: 20px 0; border-radius: 10px; position: relative; overflow: auto; display: none; border: 5px solid #5d4037; box-shadow: inset 0 0 50px rgba(0,0,0,0.8); }
+        .grid-container { position: relative; width: 1500px; height: 800px; /* 给一个够大的虚拟桌面 */ }
+        
+        /* 卡牌通用样式 */
+        .card { width: 70px; height: 100px; background: #ecf0f1; color: #2c3e50; border-radius: 6px; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; text-align: center; font-size: 12px; font-weight: bold; border: 2px solid #bdc3c7; cursor: pointer; }
+        
+        /* 桌上的卡牌（绝对定位） */
+        .board-card { position: absolute; }
+        .start-card { background: #27ae60; color: white; border-color: #2ecc71; }
+        .goal-card { background: #7f8c8d; color: white; border-color: #95a5a6; }
+        
+        /* 玩家操作区（手牌） */
+        #player-area { background: #1a252f; padding: 15px; border-radius: 8px; display: none; }
+        #my-hand { display: flex; gap: 10px; margin-top: 10px; }
+        .hand-card { transition: transform 0.2s; }
+        .hand-card:hover { transform: translateY(-10px); background: #f1c40f; border-color: #f39c12; }
+        .role-text { color: #e74c3c; font-size: 1.2em; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h1>矮人矿坑测试</h1>
-    <p>当前房间人数: <span id="player-count">0</span>/10</p>
-    
-    <button id="start-btn" onclick="startGame()">分配身份与发牌</button>
+    <div class="header">
+        <div>
+            <h2>⛏️ 矮人矿坑 (Saboteur)</h2>
+            <p style="margin: 0; color: #bdc3c7;">房间人数: <span id="player-count">0</span>/10 | 等待最少3人开始</p>
+        </div>
+        <button id="start-btn" onclick="startGame()">▶ 开始游戏 (发牌与布阵)</button>
+    </div>
 
-    <div id="game-board">
-        <h2>你的隐藏身份: <span id="my-role" style="color: red;"></span></h2>
-        <h3>你的手牌:</h3>
+    <div id="tabletop">
+        <div class="grid-container" id="board-grid">
+            </div>
+    </div>
+
+    <div id="player-area">
+        <div>你的隐藏身份: <span id="my-role" class="role-text"></span></div>
         <div id="my-hand"></div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io(); // 连接到服务器
+        const socket = io();
 
-        // 监听房间人数变化
-        socket.on('playerJoined', (data) => {
-            document.getElementById('player-count').innerText = data.playerCount;
-        });
-        socket.on('playerLeft', (data) => {
-            document.getElementById('player-count').innerText = data.playerCount;
-        });
+        socket.on('playerJoined', data => document.getElementById('player-count').innerText = data.playerCount);
+        socket.on('playerLeft', data => document.getElementById('player-count').innerText = data.playerCount);
 
-        // 告诉服务器：我们要开始游戏了
-        function startGame() {
-            socket.emit('requestStartGame');
-        }
+        function startGame() { socket.emit('requestStartGame'); }
 
-        // 接收服务器发来的游戏初始数据
         socket.on('gameStarted', (data) => {
-            document.getElementById('game-board').style.display = 'block';
-            document.getElementById('my-role').innerText = data.yourRole; // 显示身份
+            document.getElementById('tabletop').style.display = 'block';
+            document.getElementById('player-area').style.display = 'block';
+            document.getElementById('my-role').innerText = data.yourRole;
             
-            // 显示手牌
+            // 渲染手牌
             const handDiv = document.getElementById('my-hand');
             handDiv.innerHTML = ''; 
             data.yourHand.forEach(card => {
-                const cardSpan = document.createElement('span');
-                cardSpan.className = 'card';
-                cardSpan.innerText = `${card.type} (${card.id})`;
-                handDiv.appendChild(cardSpan);
+                const cardDiv = document.createElement('div');
+                cardDiv.className = 'card hand-card';
+                cardDiv.innerText = card.id;
+                handDiv.appendChild(cardDiv);
             });
+
+            // 渲染桌面地图 (将网格坐标转换为像素像素位置)
+            const boardGrid = document.getElementById('board-grid');
+            boardGrid.innerHTML = '';
+            // 设定基准点 (让起点显示在屏幕中间偏左)
+            const baseX = 100; 
+            const baseY = 350;
+            const cardWidth = 80;  // 70px宽度 + 10px间距
+            const cardHeight = 110; // 100px高度 + 10px间距
+
+            for (const [coord, card] of Object.entries(data.board)) {
+                const [x, y] = coord.split(',').map(Number);
+                const cardEl = document.createElement('div');
+                
+                // 计算在屏幕上的绝对位置
+                cardEl.style.left = `${baseX + x * cardWidth}px`;
+                cardEl.style.top = `${baseY + y * cardHeight}px`;
+                
+                cardEl.innerText = card.name;
+                
+                if (card.type === 'start') {
+                    cardEl.className = 'card board-card start-card';
+                } else if (card.type === 'goal') {
+                    cardEl.className = 'card board-card goal-card';
+                    cardEl.innerText += '\n?'; // 背面朝上
+                }
+                
+                boardGrid.appendChild(cardEl);
+            }
         });
     </script>
 </body>

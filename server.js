@@ -4,17 +4,15 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: "*" } // 允许所有前端跨域连接，方便测试
-});
+const io = new Server(server, { cors: { origin: "*" } });
+
 app.use(express.static('public'));
 
-// 游戏全局状态
-let players = []; // 存储加入的玩家 { id, role, hand: [] }
-let deck = [];    // 抽牌堆
-let setAsideRoleCard = null; // 每局必须扣除的一张身份牌
+let players = []; 
+let deck = [];    
+let setAsideRoleCard = null;
+let board = {}; // 存储桌上的卡牌，格式 { 'x,y': cardData }
 
-// 辅助函数：洗牌算法 (Fisher-Yates)
 function shuffle(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -23,12 +21,8 @@ function shuffle(array) {
     return array;
 }
 
-// 核心逻辑 1：根据人数生成身份牌堆
 function getRoleDeck(playerCount) {
-    let saboteurs = 0;
-    let miners = 0;
-
-    // 严格按照规则说明书分配身份 [cite: 20, 21, 22]
+    let saboteurs = 0, miners = 0;
     if (playerCount === 3) { saboteurs = 1; miners = 3; }
     else if (playerCount === 4) { saboteurs = 1; miners = 4; }
     else if (playerCount === 5) { saboteurs = 2; miners = 4; }
@@ -37,90 +31,76 @@ function getRoleDeck(playerCount) {
     else if (playerCount === 8) { saboteurs = 3; miners = 6; }
     else if (playerCount === 9) { saboteurs = 3; miners = 7; }
     else if (playerCount === 10) { saboteurs = 4; miners = 7; }
-    else { return []; } // 不支持的人数
-
+    else { return []; }
+    
     const roleDeck = [];
     for (let i = 0; i < saboteurs; i++) roleDeck.push('Saboteur');
     for (let i = 0; i < miners; i++) roleDeck.push('Gold Miner');
-    
-    return shuffle(roleDeck); // 洗混身份牌 [cite: 23]
+    return shuffle(roleDeck); 
 }
 
-// 核心逻辑 2：初始化游戏与发牌
 function startGame() {
     const playerCount = players.length;
-    if (playerCount < 3 || playerCount > 10) {
-        console.log("人数必须在 3 到 10 人之间");
-        return;
-    }
+    if (playerCount < 3 || playerCount > 10) return;
 
-    console.log(`游戏开始！当前人数：${playerCount}`);
-
-    // 1. 分配身份
+    // 1. 发身份
     const roleDeck = getRoleDeck(playerCount);
     players.forEach(player => {
-        player.role = roleDeck.pop(); // 每人发一张身份牌 [cite: 24]
-        player.hand = []; // 清空手牌
+        player.role = roleDeck.pop();
+        player.hand = [];
     });
-    setAsideRoleCard = roleDeck.pop(); // 剩下一张身份牌扣置一旁 [cite: 25]
+    setAsideRoleCard = roleDeck.pop();
 
-    // 2. 构建游戏卡牌堆 (40张路线卡 + 27张行动卡) [cite: 38]
+    // 2. 初始化桌面地图 (起点和3个终点)
+    board = {};
+    board['0,0'] = { type: 'start', faceUp: true, name: '起点' };
+    
+    // 准备终点卡：1个宝藏，2个石头
+    let goals = [
+        { type: 'goal', faceUp: false, isTreasure: true, name: '终点(隐藏)' },
+        { type: 'goal', faceUp: false, isTreasure: false, name: '终点(隐藏)' },
+        { type: 'goal', faceUp: false, isTreasure: false, name: '终点(隐藏)' }
+    ];
+    goals = shuffle(goals);
+    
+    // 根据规则，距离起点7个卡牌宽度放置终点，上下各隔开一张卡的距离
+    board['8,-2'] = goals[0];
+    board['8,0'] = goals[1];
+    board['8,2'] = goals[2];
+
+    // 3. 生成手牌并洗牌
     deck = [];
-    // (这里暂时用简单的字符串代替复杂的卡牌对象，后续我们会换成具体的路线/行动对象)
-    for (let i = 0; i < 40; i++) deck.push({ type: 'path', id: `path_${i}` });
-    for (let i = 0; i < 27; i++) deck.push({ type: 'action', id: `action_${i}` });
-    deck = shuffle(deck); // 洗混抽牌堆 [cite: 38]
+    for (let i = 0; i < 40; i++) deck.push({ type: 'path', id: `道路_${i}` });
+    for (let i = 0; i < 27; i++) deck.push({ type: 'action', id: `行动_${i}` });
+    deck = shuffle(deck);
 
-    // 3. 根据人数决定初始手牌数量
-    let cardsPerPlayer = 0;
-    if (playerCount >= 3 && playerCount <= 5) cardsPerPlayer = 6; // 3-5人发6张 [cite: 40]
-    else if (playerCount >= 6 && playerCount <= 7) cardsPerPlayer = 5; // 6-7人发5张 [cite: 40]
-    else if (playerCount >= 8 && playerCount <= 10) cardsPerPlayer = 4; // 8-10人发4张 [cite: 41]
-
-    // 4. 发放手牌 [cite: 39]
+    // 4. 发牌
+    let cardsPerPlayer = (playerCount >= 3 && playerCount <= 5) ? 6 : (playerCount >= 6 && playerCount <= 7) ? 5 : 4;
     for (let i = 0; i < cardsPerPlayer; i++) {
-        players.forEach(player => {
-            if (deck.length > 0) {
-                player.hand.push(deck.pop());
-            }
-        });
+        players.forEach(player => { if (deck.length > 0) player.hand.push(deck.pop()); });
     }
 
-    // 5. 将结果发送给每个玩家 (隐藏别人的身份)
+    // 5. 将数据发给前端 (加入 board 数据)
     players.forEach(player => {
         io.to(player.id).emit('gameStarted', {
             yourRole: player.role,
             yourHand: player.hand,
-            playersCount: playerCount
+            board: board
         });
     });
-    
-    console.log("发牌完毕！");
 }
 
-// Socket.io 客户端连接逻辑
 io.on('connection', (socket) => {
-    console.log(`玩家已连接: ${socket.id}`);
-    
-    // 玩家加入房间
     players.push({ id: socket.id, role: null, hand: [] });
-    io.emit('playerJoined', { playerCount: players.length }); // 广播当前人数
+    io.emit('playerJoined', { playerCount: players.length });
 
-    // 监听前端发来的“开始游戏”指令
-    socket.on('requestStartGame', () => {
-        startGame();
-    });
+    socket.on('requestStartGame', () => startGame());
 
-    // 玩家断开连接
     socket.on('disconnect', () => {
-        console.log(`玩家已离开: ${socket.id}`);
         players = players.filter(p => p.id !== socket.id);
         io.emit('playerLeft', { playerCount: players.length });
     });
 });
 
-// 启动服务器
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`矮人矿坑服务器已启动，监听端口: ${PORT}`);
-});
+server.listen(PORT, () => console.log(`服务器启动: ${PORT}`));
