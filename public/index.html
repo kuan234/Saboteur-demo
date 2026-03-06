@@ -34,9 +34,17 @@
     <div class="header">
         <div>
             <h2>⛏️ 矮人矿坑 (Saboteur)</h2>
-            <p style="margin: 0; color: #bdc3c7;">房间人数: <span id="player-count">0</span>/10 | 等待最少3人开始</p>
+            <p style="margin: 0; color: #bdc3c7;">
+                房间号: <span id="room-id">-</span> |
+                房间人数: <span id="player-count">0</span>/10 | 等待最少3人开始
+            </p>
         </div>
-        <button id="start-btn" onclick="startGame()">▶ 开始游戏 (发牌与布阵)</button>
+        <div>
+            <input id="room-input" placeholder="输入房间号" style="width:100px;padding:6px;border-radius:4px;border:none;margin-right:8px;">
+            <button onclick="createRoom()">创建房间</button>
+            <button onclick="joinRoom()">加入房间</button>
+            <button id="start-btn" onclick="startGame()" style="margin-left:8px;">▶ 开始游戏 (房主)</button>
+        </div>
     </div>
 
     <div id="tabletop">
@@ -54,10 +62,33 @@
     <script>
         const socket = io();
         let selectedCard = null;
+        let currentRoomId = null;
+        let isHost = false;
 
         socket.on('playerJoined', data => document.getElementById('player-count').innerText = data.playerCount);
         socket.on('playerLeft', data => document.getElementById('player-count').innerText = data.playerCount);
-        function startGame() { socket.emit('requestStartGame'); }
+
+        function createRoom() {
+            socket.emit('createRoom');
+        }
+
+        function joinRoom() {
+            const roomId = document.getElementById('room-input').value.trim();
+            if (!roomId) { alert('请输入房间号'); return; }
+            socket.emit('joinRoom', { roomId });
+        }
+
+        socket.on('roomJoined', data => {
+            currentRoomId = data.roomId;
+            isHost = data.isHost;
+            document.getElementById('room-id').innerText = currentRoomId;
+            document.getElementById('start-btn').disabled = !isHost;
+        });
+
+        function startGame() {
+            if (!currentRoomId) { alert('请先创建或加入房间'); return; }
+            socket.emit('requestStartGame', { roomId: currentRoomId });
+        }
 
         socket.on('gameStarted', (data) => {
             document.getElementById('tabletop').style.display = 'block';
@@ -113,11 +144,12 @@
 
         document.getElementById('board-grid').onclick = (event) => {
             if (!selectedCard) { alert("请先在下方选中一张手牌！"); return; }
+            if (!currentRoomId) { alert("你还没有加入房间！"); return; }
             const rect = document.getElementById('board-grid').getBoundingClientRect();
             const gridX = Math.round((event.clientX - rect.left - 100) / 80);
             const gridY = Math.round((event.clientY - rect.top - 350) / 110);
 
-            socket.emit('playCard', { card: selectedCard, targetX: gridX, targetY: gridY });
+            socket.emit('playCard', { roomId: currentRoomId, card: selectedCard, targetX: gridX, targetY: gridY });
             
             selectedCard = null;
             document.getElementById('discard-btn').style.display = 'none';
@@ -127,7 +159,8 @@
         function discardSelectedCard() {
             if (!selectedCard) return;
             if(confirm(`确定要弃掉并且跳过本回合吗？`)) {
-                socket.emit('discardCard', { card: selectedCard });
+                if (!currentRoomId) { alert('你还没有加入房间！'); return; }
+                socket.emit('discardCard', { roomId: currentRoomId, card: selectedCard });
                 selectedCard = null;
                 document.getElementById('discard-btn').style.display = 'none';
                 document.querySelectorAll('.hand-card').forEach(c => c.classList.remove('selected'));
