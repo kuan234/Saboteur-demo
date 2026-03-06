@@ -72,6 +72,7 @@
         let currentRoomId = null;
         let isHost = false;
         let selectedTargetPlayerId = null;
+        let myPlayerKey = null;
 
         socket.on('playerJoined', data => document.getElementById('player-count').innerText = data.playerCount);
         socket.on('playerLeft', data => document.getElementById('player-count').innerText = data.playerCount);
@@ -89,8 +90,44 @@
         socket.on('roomJoined', data => {
             currentRoomId = data.roomId;
             isHost = data.isHost;
+            myPlayerKey = data.playerKey;
             document.getElementById('room-id').innerText = currentRoomId;
             document.getElementById('start-btn').disabled = !isHost;
+            // 把身份信息存到本地，用于断线重连
+            try {
+                localStorage.setItem('saboteur_roomId', currentRoomId);
+                localStorage.setItem('saboteur_playerKey', myPlayerKey);
+            } catch (e) {}
+        });
+
+        // 页面加载后，如果本地有记录，尝试自动重连
+        (function tryReconnect() {
+            try {
+                const roomId = localStorage.getItem('saboteur_roomId');
+                const playerKey = localStorage.getItem('saboteur_playerKey');
+                if (roomId && playerKey) {
+                    socket.emit('reconnectPlayer', { roomId, playerKey });
+                }
+            } catch (e) {}
+        })();
+
+        socket.on('reconnectedState', data => {
+            currentRoomId = data.roomId;
+            myPlayerKey = localStorage.getItem('saboteur_playerKey');
+            document.getElementById('room-id').innerText = currentRoomId;
+            document.getElementById('tabletop').style.display = 'block';
+            document.getElementById('player-area').style.display = 'block';
+            document.getElementById('my-role').innerText = data.yourRole || '';
+            document.getElementById('turn-status').innerText = '已重连，等待轮到你出牌...';
+            renderHand(data.yourHand || []);
+            renderBoard(data.board || {});
+            updateScoresView({
+                round: data.round,
+                winners: null,
+                msg: '',
+                scores: data.scores || {},
+                delta: {}
+            });
         });
 
         socket.on('roomPlayers', data => {
@@ -238,9 +275,9 @@
             const { round, winners, msg, scores, delta } = payload;
             if (roundDiv) roundDiv.innerText = `第 ${round} / 3 轮`;
             if (!scores) return;
-            const myId = socket.id;
-            const myScore = scores[myId] ?? 0;
-            const myDelta = delta && delta[myId] ? ` (+${delta[myId]})` : '';
+            const key = myPlayerKey;
+            const myScore = key ? (scores[key] ?? 0) : 0;
+            const myDelta = key && delta && delta[key] ? ` (+${delta[key]})` : '';
             scoreDiv.innerText = `当前总金块：你 ${myScore}${myDelta}`;
         }
 

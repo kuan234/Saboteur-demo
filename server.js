@@ -11,13 +11,13 @@ app.use(express.static('public'));
 // 多房间结构：每个房间都有自己的一套状态
 // rooms[roomId] = {
 //   hostId,
-//   players: [{ id, role, hand, tools }],
+//   players: [{ id, playerKey, role, hand, tools, disconnected }],
 //   deck,
 //   setAsideRoleCard,
 //   board,
 //   currentPlayerIndex,
 //   round,
-//   scores: { [playerId]: number }
+//   scores: { [playerKey]: number }
 // }
 const rooms = {};
 
@@ -81,7 +81,9 @@ function broadcastRoomPlayers(roomId) {
     io.to(roomId).emit('roomPlayers', {
         players: room.players.map(p => ({
             id: p.id,
-            role: p.role || null
+            playerKey: p.playerKey,
+            role: p.role || null,
+            disconnected: !!p.disconnected
         }))
     });
 }
@@ -89,8 +91,8 @@ function broadcastRoomPlayers(roomId) {
 function ensureScoreEntries(room) {
     if (!room.scores) room.scores = {};
     room.players.forEach(p => {
-        if (room.scores[p.id] == null) {
-            room.scores[p.id] = 0;
+        if (room.scores[p.playerKey] == null) {
+            room.scores[p.playerKey] = 0;
         }
     });
 }
@@ -109,8 +111,8 @@ function finishRound(roomId, winners, msg, connectorPlayerId) {
         // 简化版：每个好矮人随机获得 1-3 金块
         miners.forEach(p => {
             const gain = 1 + Math.floor(Math.random() * 3);
-            room.scores[p.id] += gain;
-            scoreDelta[p.id] = gain;
+            room.scores[p.playerKey] += gain;
+            scoreDelta[p.playerKey] = gain;
         });
     } else if (winners === 'Saboteur') {
         // 按官方规则的总金块数：1/2~3/>=4 个坏矮人
@@ -120,8 +122,8 @@ function finishRound(roomId, winners, msg, connectorPlayerId) {
         else if (sabCount === 2 || sabCount === 3) gain = 3;
         else if (sabCount >= 4) gain = 2;
         saboteurs.forEach(p => {
-            room.scores[p.id] += gain;
-            scoreDelta[p.id] = gain;
+            room.scores[p.playerKey] += gain;
+            scoreDelta[p.playerKey] = gain;
         });
     }
 
@@ -234,6 +236,39 @@ function startGame(roomId) {
 }
 
 io.on('connection', (socket) => {
+    // 断线重连：客户端会在连接后自动发送本地保存的 playerKey/roomId
+    socket.on('reconnectPlayer', (data) => {
+        const { roomId, playerKey } = data || {};
+        const room = rooms[roomId];
+        if (!room) {
+            socket.emit('errorMsg', '房间不存在或已被清理，无法重连。');
+            return;
+        }
+        const player = room.players.find(p => p.playerKey === playerKey);
+        if (!player) {
+            socket.emit('errorMsg', '未找到可重连的玩家位置。');
+            return;
+        }
+        // 更新 socket id 并标记在线
+        player.id = socket.id;
+        player.disconnected = false;
+        socket.join(roomId);
+
+        // 把当前房间状态同步给该玩家
+        ensureScoreEntries(room);
+        socket.emit('reconnectedState', {
+            roomId,
+            yourRole: player.role,
+            yourHand: player.hand,
+            board: room.board,
+            round: room.round,
+            scores: room.scores,
+            currentTurnId: room.players[room.currentPlayerIndex]?.id || null
+        });
+        io.to(roomId).emit('playerJoined', { playerCount: room.players.filter(p => !p.disconnected).length });
+        broadcastRoomPlayers(roomId);
+    });
+
     socket.on('createRoom', () => {
         let roomId;
         do {
@@ -242,12 +277,13 @@ io.on('connection', (socket) => {
 
         createRoom(roomId, socket.id);
         const room = rooms[roomId];
-        room.players.push({ id: socket.id, role: null, hand: [], tools: { cart: true, lantern: true, pickaxe: true } });
+        const playerKey = Math.random().toString(36).slice(2, 10);
+        room.players.push({ id: socket.id, playerKey, role: null, hand: [], tools: { cart: true, lantern: true, pickaxe: true }, disconnected: false });
         socket.join(roomId);
 
         io.to(roomId).emit('playerJoined', { playerCount: room.players.length });
         broadcastRoomPlayers(roomId);
-        socket.emit('roomJoined', { roomId, isHost: true });
+        socket.emit('roomJoined', { roomId, isHost: true, playerKey });
     });
 
     socket.on('joinRoom', (data) => {
@@ -257,11 +293,12 @@ io.on('connection', (socket) => {
             socket.emit('errorMsg', '房间不存在！');
             return;
         }
-        room.players.push({ id: socket.id, role: null, hand: [], tools: { cart: true, lantern: true, pickaxe: true } });
+        const playerKey = Math.random().toString(36).slice(2, 10);
+        room.players.push({ id: socket.id, playerKey, role: null, hand: [], tools: { cart: true, lantern: true, pickaxe: true }, disconnected: false });
         socket.join(roomId);
         io.to(roomId).emit('playerJoined', { playerCount: room.players.length });
         broadcastRoomPlayers(roomId);
-        socket.emit('roomJoined', { roomId, isHost: false });
+        socket.emit('roomJoined', { roomId, isHost: false, playerKey });
     });
 
     socket.on('requestStartGame', (data) => {
@@ -493,12 +530,12 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        // 简化：断线暂时直接移出房间
+        // 标记玩家断线，但保留其位置和分数，便于重连
         for (const [roomId, room] of Object.entries(rooms)) {
-            const idx = room.players.findIndex(p => p.id === socket.id);
-            if (idx !== -1) {
-                room.players.splice(idx, 1);
-                io.to(roomId).emit('playerLeft', { playerCount: room.players.length });
+            const player = room.players.find(p => p.id === socket.id);
+            if (player) {
+                player.disconnected = true;
+                io.to(roomId).emit('playerLeft', { playerCount: room.players.filter(p => !p.disconnected).length });
                 broadcastRoomPlayers(roomId);
                 break;
             }
