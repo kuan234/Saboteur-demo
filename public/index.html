@@ -12,7 +12,7 @@
         #tabletop { flex: 1; background-color: #3e2723; margin: 20px 0; border-radius: 10px; position: relative; overflow: auto; display: none; border: 5px solid #5d4037; box-shadow: inset 0 0 50px rgba(0,0,0,0.8); }
         .grid-container { position: relative; width: 1500px; height: 800px; cursor: crosshair; }
         
-        .card { width: 70px; height: 100px; background: #ecf0f1; color: #2c3e50; border-radius: 6px; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; border: 2px solid #bdc3c7; cursor: pointer; user-select: none; }
+        .card { width: 70px; height: 100px; background: #ecf0f1; color: #2c3e50; border-radius: 6px; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; border: 2px solid #bdc3c7; cursor: pointer; user-select: none; position: relative; }
         
         /* 超大字体用来显示道路符号 */
         .card-symbol { font-size: 60px; line-height: 60px; font-weight: normal; color: #7f8c8d; }
@@ -191,14 +191,25 @@
 
                 if (card.type === 'path') {
                     const rotateBtn = cardDiv.querySelector('.rotate-btn');
-                    rotateBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        // 只允许 180° 旋转：上下、左右互换
-                        if (Array.isArray(card.dirs) && card.dirs.length === 4) {
-                            const [top, right, bottom, left] = card.dirs;
-                            card.dirs = [bottom, left, top, right];
-                        }
-                    };
+                    if (rotateBtn) {
+                        rotateBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            // 初始化 rotation
+                            if (typeof card.rotation !== 'number') {
+                                card.rotation = 0;
+                            }
+                            // 只允许 180° 旋转：上下、左右互换
+                            if (Array.isArray(card.dirs) && card.dirs.length === 4) {
+                                const [top, right, bottom, left] = card.dirs;
+                                card.dirs = [bottom, left, top, right];
+                            }
+                            card.rotation = (card.rotation + 180) % 360;
+                            const symbolEl = cardDiv.querySelector('.card-symbol');
+                            if (symbolEl) {
+                                symbolEl.style.transform = `rotate(${card.rotation}deg)`;
+                            }
+                        };
+                    }
                 }
                 handDiv.appendChild(cardDiv);
             });
