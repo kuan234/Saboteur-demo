@@ -4,53 +4,104 @@
 <head>
     <meta charset="UTF-8">
     <title>矮人矿坑 - 游戏大厅</title>
+    <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Noto+Sans+SC:wght@400;700&display=swap"
+        rel="stylesheet">
     <style>
+        :root {
+            --bg-dark: #121619;
+            --panel-bg: rgba(30, 42, 56, 0.85);
+            --primary: #f39c12;
+            --primary-hover: #d35400;
+            --text-main: #ecf0f1;
+            --glass-border: rgba(255, 255, 255, 0.15);
+            --font-title: 'ZCOOL KuaiLe', cursive;
+            --font-main: 'Noto Sans SC', sans-serif;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #2c3e50;
-            color: white;
+            font-family: var(--font-main);
+            background: radial-gradient(circle at center, #2c3e50 0%, #111418 100%);
+            color: var(--text-main);
             margin: 0;
             padding: 20px;
             display: flex;
             flex-direction: column;
             height: 100vh;
+            overflow: hidden;
         }
 
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: #34495e;
-            padding: 10px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            background: var(--panel-bg);
+            backdrop-filter: blur(10px);
+            padding: 15px 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--glass-border);
+        }
+
+        h2 {
+            font-family: var(--font-title);
+            margin: 0 0 5px 0;
+            font-size: 28px;
+            color: var(--primary);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         button {
-            background: #e67e22;
+            background: linear-gradient(135deg, var(--primary), #e67e22);
             color: white;
             border: none;
-            padding: 10px 20px;
-            font-size: 16px;
-            border-radius: 5px;
+            padding: 8px 18px;
+            font-size: 14px;
+            border-radius: 6px;
             cursor: pointer;
             font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
         }
 
         button:hover {
-            background: #d35400;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(230, 126, 34, 0.4);
+        }
+
+        button:active {
+            transform: translateY(1px);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+
+        button:disabled {
+            background: #7f8c8d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        input {
+            background: rgba(0, 0, 0, 0.2);
+            color: white;
+            box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5);
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            border: 1px solid var(--primary) !important;
+            outline: none;
         }
 
         #tabletop {
             flex: 1;
-            background-color: #3e2723;
+            background: radial-gradient(circle at center, #4e342e 0%, #261714 80%);
             margin: 20px 0;
-            border-radius: 10px;
+            border-radius: 12px;
             position: relative;
             overflow: auto;
             display: none;
-            border: 5px solid #5d4037;
-            box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.8);
+            border: 4px solid #3e2723;
+            box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.9), 0 10px 30px rgba(0, 0, 0, 0.5);
         }
 
         .grid-container {
@@ -64,104 +115,127 @@
             position: absolute;
             width: 80px;
             height: 110px;
-            border: 1px dashed rgba(255, 255, 255, 0.15);
+            border: 1px dashed rgba(255, 255, 255, 0.08);
             box-sizing: border-box;
             pointer-events: none;
+            border-radius: 6px;
         }
 
         .grid-cell.placeable {
-            border-color: rgba(46, 204, 113, 0.45);
-            background: rgba(46, 204, 113, 0.08);
+            border-color: rgba(46, 204, 113, 0.6);
+            background: rgba(46, 204, 113, 0.1);
+            box-shadow: inset 0 0 15px rgba(46, 204, 113, 0.2);
+            animation: pulse-green 2s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% {
+                box-shadow: inset 0 0 15px rgba(46, 204, 113, 0.2);
+            }
+
+            50% {
+                box-shadow: inset 0 0 25px rgba(46, 204, 113, 0.4);
+            }
+
+            100% {
+                box-shadow: inset 0 0 15px rgba(46, 204, 113, 0.2);
+            }
         }
 
         .card {
             width: 70px;
             height: 100px;
-            background: #ecf0f1;
+            background: linear-gradient(135deg, #ecf0f1, #bdc3c7);
             color: #2c3e50;
-            border-radius: 6px;
-            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.8);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             text-align: center;
-            border: 2px solid #bdc3c7;
+            border: 1px solid #95a5a6;
             cursor: pointer;
             user-select: none;
             position: relative;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
-        /* 超大字体用来显示道路符号 */
         .card-symbol {
-            font-size: 60px;
-            line-height: 60px;
+            font-size: 55px;
+            line-height: 55px;
             font-weight: normal;
-            color: #7f8c8d;
+            color: #34495e;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+            transition: transform 0.4s ease;
         }
 
         .start-card {
-            background: #27ae60;
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
             color: white;
-            border-color: #2ecc71;
+            border-color: #1abc9c;
         }
 
         .start-card .card-symbol {
             color: white;
-            font-size: 30px;
+            font-size: 28px;
             font-weight: bold;
+            font-family: var(--font-title);
         }
 
         .goal-card {
-            background: #34495e;
+            background: linear-gradient(135deg, #2c3e50, #34495e);
             color: white;
-            border-color: #95a5a6;
+            border-color: #7f8c8d;
         }
 
         .goal-card .card-symbol {
             color: #bdc3c7;
-            font-size: 30px;
+            font-size: 28px;
+            font-family: var(--font-title);
         }
 
         .board-card {
             position: absolute;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6);
         }
 
         #player-area {
-            background: #1a252f;
-            padding: 15px;
-            border-radius: 8px;
+            background: var(--panel-bg);
+            backdrop-filter: blur(10px);
+            padding: 15px 25px;
+            border-radius: 12px;
             display: none;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.3);
+            z-index: 10;
         }
 
         #my-hand {
             display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .hand-card {
-            transition: transform 0.2s;
+            gap: 15px;
+            margin-top: 12px;
+            min-height: 110px;
         }
 
         .hand-card:hover {
-            transform: translateY(-10px);
-            background: #f1c40f;
-            border-color: #f39c12;
+            transform: translateY(-12px) scale(1.05);
+            box-shadow: 0 15px 25px rgba(0, 0, 0, 0.5);
+            z-index: 2;
         }
 
         .hand-card.selected {
-            transform: translateY(-20px);
-            background: #f1c40f;
-            border: 3px solid #e74c3c;
-            box-shadow: 0 0 15px rgba(231, 76, 60, 0.8);
+            transform: translateY(-20px) scale(1.05);
+            border: 2px solid var(--primary);
+            box-shadow: 0 0 20px rgba(243, 156, 18, 0.8), 0 15px 25px rgba(0, 0, 0, 0.5);
+            z-index: 3;
         }
 
         .role-text {
-            color: #e74c3c;
+            color: var(--primary);
             font-size: 1.2em;
-            font-weight: bold;
+            font-family: var(--font-title);
+            letter-spacing: 1px;
         }
 
         #score-board {
@@ -277,7 +351,7 @@
 <body>
     <div class="header">
         <div>
-            <h2>⛏️ 矮人矿坑 (Saboteur)</h2>
+            <h2>⛏️ 矮人矿坑 Saboteur</h2>
             <p style="margin: 0; color: #bdc3c7;">
                 房间号: <span id="room-id">-</span> |
                 房间人数: <span id="player-count">0</span>/10 | 等待最少3人开始
@@ -293,7 +367,8 @@
             <button onclick="createRoom()">创建房间</button>
             <button onclick="joinRoom()">加入房间</button>
             <button id="start-btn" onclick="startGame()" style="margin-left:8px;">▶ 开始游戏 (房主)</button>
-            <button id="voice-btn" onclick="toggleVoice()" style="margin-left:8px;background:#16a085;">🎙 开启语音</button>
+            <button id="voice-btn" onclick="toggleVoice()"
+                style="margin-left:8px;background:linear-gradient(135deg, #16a085, #1abc9c);">🎙 开启语音</button>
         </div>
     </div>
 
@@ -302,9 +377,11 @@
     </div>
 
     <div id="player-area">
-        <div><span id="my-name" style="color:#3498db;font-weight:bold;"></span> | 你的隐藏身份: <span id="my-role"
-                class="role-text"></span></div>
-        <div id="turn-status" style="color: #f1c40f; font-size: 1.2em; font-weight: bold; margin-top: 10px;">等待游戏开始...
+        <div><span id="my-name" style="color:var(--primary);font-weight:bold;font-size:1.1em;"></span> <span
+                style="color:#7f8c8d">|</span> 隐藏身份: <span id="my-role" class="role-text">等待分配...</span></div>
+        <div id="turn-status"
+            style="color: var(--text-main); font-size: 1.25em; font-family: var(--font-title); margin-top: 12px; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">
+            大厅准备中...
         </div>
         <div id="round-info" style="margin-top:6px;color:#bdc3c7;font-size:0.9em;">第 1 / 3 轮</div>
         <div id="score-board"></div>
@@ -314,11 +391,20 @@
         <div id="my-hand"></div>
     </div>
 
+    <!-- 自定义模态框 -->
+    <div id="custom-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div id="modal-title" class="modal-title">提示</div>
+            <div id="modal-text" class="modal-content"></div>
+            <div id="modal-buttons" class="modal-buttons"></div>
+        </div>
+    </div>
+
     <!-- 聊天室 -->
-    <div id="chat-panel" style="display:none;">
+    <div id="chat-panel" style="display:none;" class="collapsed">
         <div class="chat-header" onclick="toggleChatPanel()">
-            <span>💬 聊天室</span>
-            <span id="chat-toggle">▼</span>
+            <span>💬 <span style="color:var(--primary);">矿洞频道</span></span>
+            <span id="chat-toggle">▲</span>
         </div>
         <div id="chat-body">
             <div id="chat-messages"></div>
@@ -341,13 +427,56 @@
         let localStream = null;
         const peers = {}; // remoteSocketId -> RTCPeerConnection
 
+        // 模态框逻辑
+        function showModal(title, text, buttons) {
+            const overlay = document.getElementById('custom-modal');
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-text').innerText = text;
+            const btnContainer = document.getElementById('modal-buttons');
+            btnContainer.innerHTML = '';
+
+            buttons.forEach(btn => {
+                const b = document.createElement('button');
+                b.innerText = btn.text;
+                if (btn.type === 'cancel') b.className = 'modal-btn-cancel';
+                else if (btn.type === 'confirm') b.className = 'modal-btn-confirm';
+                b.style.margin = "0 8px";
+                b.onclick = () => {
+                    closeModal();
+                    if (btn.onClick) btn.onClick();
+                };
+                btnContainer.appendChild(b);
+            });
+
+            overlay.style.display = 'flex';
+            void overlay.offsetWidth;
+            overlay.classList.add('show');
+        }
+
+        function closeModal() {
+            const overlay = document.getElementById('custom-modal');
+            overlay.classList.remove('show');
+            setTimeout(() => { if (!overlay.classList.contains('show')) overlay.style.display = 'none'; }, 300);
+        }
+
+        function showAlert(text, title = '提示') {
+            showModal(title, text, [{ text: '确定', type: 'confirm' }]);
+        }
+
+        function showConfirm(text, onConfirm, onCancel, title = '系统询问') {
+            showModal(title, text, [
+                { text: '取消', type: 'cancel', onClick: onCancel },
+                { text: '确定', type: 'confirm', onClick: onConfirm }
+            ]);
+        }
+
         socket.on('playerJoined', data => document.getElementById('player-count').innerText = data.playerCount);
         socket.on('playerLeft', data => document.getElementById('player-count').innerText = data.playerCount);
 
         // 确认/修改名字
         function confirmName() {
             const newName = document.getElementById('name-input').value.trim();
-            if (!newName) { alert('请输入昵称！'); return; }
+            if (!newName) { showAlert('请输入昵称！'); return; }
             myName = newName;
             document.getElementById('my-name').innerText = myName;
             if (currentRoomId) {
@@ -367,7 +496,7 @@
 
         function joinRoom() {
             const roomId = document.getElementById('room-input').value.trim();
-            if (!roomId) { alert('请输入房间号'); return; }
+            if (!roomId) { showAlert('请输入房间号'); return; }
             myName = document.getElementById('name-input').value.trim() || '玩家';
             socket.emit('joinRoom', { roomId, name: myName });
         }
@@ -393,7 +522,14 @@
                 const roomId = localStorage.getItem('saboteur_roomId');
                 const playerKey = localStorage.getItem('saboteur_playerKey');
                 if (roomId && playerKey) {
-                    socket.emit('reconnectPlayer', { roomId, playerKey });
+                    showConfirm(`发现你有一个未完成的对局 (房间号: ${roomId})，是否重连？`,
+                        () => { socket.emit('reconnectPlayer', { roomId, playerKey }); },
+                        () => {
+                            localStorage.removeItem('saboteur_roomId');
+                            localStorage.removeItem('saboteur_playerKey');
+                        },
+                        '重新连接'
+                    );
                 }
             } catch (e) { }
         })();
@@ -519,7 +655,7 @@
                         socket.emit('voice-enabled', { roomId: currentRoomId });
                     }
                 } catch (e) {
-                    alert('获取麦克风失败：' + e.message);
+                    showAlert('获取麦克风失败：' + e.message);
                 }
             } else {
                 // 关闭本地音轨和所有连接
@@ -581,7 +717,7 @@
         });
 
         function startGame() {
-            if (!currentRoomId) { alert('请先创建或加入房间'); return; }
+            if (!currentRoomId) { showAlert('请先创建或加入房间'); return; }
             socket.emit('requestStartGame', { roomId: currentRoomId });
         }
 
@@ -733,8 +869,8 @@
         }
 
         document.getElementById('board-grid').onclick = (event) => {
-            if (!selectedCard) { alert("请先在下方选中一张手牌！"); return; }
-            if (!currentRoomId) { alert("你还没有加入房间！"); return; }
+            if (!selectedCard) { showAlert("请先在下方选中一张手牌！"); return; }
+            if (!currentRoomId) { showAlert("你还没有加入房间！"); return; }
             const rect = document.getElementById('board-grid').getBoundingClientRect();
             const gridX = Math.floor((event.clientX - rect.left - 100 + 40) / 80);
             const gridY = Math.floor((event.clientY - rect.top - 350 + 55) / 110);
@@ -744,7 +880,7 @@
             if (selectedCard.type === 'action') {
                 if (selectedCard.subType === 'sabotage' || selectedCard.subType === 'repair') {
                     if (!selectedTargetPlayerId) {
-                        alert('请先在上方选择一个目标玩家。');
+                        showAlert('请先在上方选择一个目标玩家。');
                         return;
                     }
                     payload.targetPlayerId = selectedTargetPlayerId;
@@ -757,20 +893,20 @@
 
         function discardSelectedCard() {
             if (!selectedCard) return;
-            if (confirm(`确定要弃掉并且跳过本回合吗？`)) {
-                if (!currentRoomId) { alert('你还没有加入房间！'); return; }
+            showConfirm(`确定要弃掉并且跳过本回合吗？`, () => {
+                if (!currentRoomId) { showAlert('你还没有加入房间！'); return; }
                 socket.emit('discardCard', { roomId: currentRoomId, card: selectedCard });
                 selectedCard = null;
                 document.getElementById('discard-btn').style.display = 'none';
                 document.querySelectorAll('.hand-card').forEach(c => c.classList.remove('selected'));
-            }
+            });
         }
 
-        socket.on('errorMsg', msg => alert(msg));
-        socket.on('gameMsg', msg => alert(msg)); // 接收普通消息 (比如挖到了石头)
+        socket.on('errorMsg', msg => showAlert(msg));
+        socket.on('gameMsg', msg => showAlert(msg)); // 接收普通消息 (比如挖到了石头)
         socket.on('mapResult', data => {
             const text = data.isTreasure ? '这是金矿终点！' : '这是石头终点。';
-            alert(`你偷看了终点 (${data.coord})：\n${text}`);
+            showAlert(`你偷看了终点 (${data.coord})：\n${text}`);
         });
 
         function updateScoresView(payload) {
@@ -787,7 +923,7 @@
 
         // 单轮结束（自动开始下一轮）
         socket.on('roundOver', data => {
-            alert(data.msg + `\n本轮结束，准备开始下一轮。`);
+            showAlert(data.msg + `\n本轮结束，准备开始下一轮。`, '本轮结束');
             updateScoresView(data);
         });
 
@@ -804,7 +940,7 @@
                 });
             }
             const rolesText = `\n\n矿工: ${minerNames.join('、') || '无'}\n破坏者: ${saboteurNames.join('、') || '无'}`;
-            alert(data.msg + `\n第 3 轮结束，整局游戏结束！` + rolesText);
+            showAlert(data.msg + `\n第 3 轮结束，整局游戏结束！` + rolesText, '游戏结束');
             updateScoresView(data);
             const statusDiv = document.getElementById('turn-status');
             statusDiv.innerText = "整局结束，刷新页面可重新开始新房间。";
