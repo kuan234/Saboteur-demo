@@ -11,7 +11,7 @@ app.use(express.static('public'));
 // 多房间结构：每个房间都有自己的一套状态
 // rooms[roomId] = {
 //   hostId,
-//   players: [{ id, role, hand }],
+//   players: [{ id, role, hand, tools }],
 //   deck,
 //   setAsideRoleCard,
 //   board,
@@ -73,6 +73,17 @@ function createRoom(roomId, hostSocketId) {
         round: 1,
         scores: {}
     };
+}
+
+function broadcastRoomPlayers(roomId) {
+    const room = rooms[roomId];
+    if (!room) return;
+    io.to(roomId).emit('roomPlayers', {
+        players: room.players.map(p => ({
+            id: p.id,
+            role: p.role || null
+        }))
+    });
 }
 
 function ensureScoreEntries(room) {
@@ -145,7 +156,11 @@ function startGame(roomId) {
     }
 
     const roleDeck = getRoleDeck(playerCount);
-    players.forEach(player => { player.role = roleDeck.pop(); player.hand = []; });
+    players.forEach(player => {
+        player.role = roleDeck.pop();
+        player.hand = [];
+        player.tools = { cart: true, lantern: true, pickaxe: true };
+    });
     room.setAsideRoleCard = roleDeck.pop();
 
     room.board = {};
@@ -227,10 +242,11 @@ io.on('connection', (socket) => {
 
         createRoom(roomId, socket.id);
         const room = rooms[roomId];
-        room.players.push({ id: socket.id, role: null, hand: [] });
+        room.players.push({ id: socket.id, role: null, hand: [], tools: { cart: true, lantern: true, pickaxe: true } });
         socket.join(roomId);
 
         io.to(roomId).emit('playerJoined', { playerCount: room.players.length });
+        broadcastRoomPlayers(roomId);
         socket.emit('roomJoined', { roomId, isHost: true });
     });
 
@@ -241,9 +257,10 @@ io.on('connection', (socket) => {
             socket.emit('errorMsg', '房间不存在！');
             return;
         }
-        room.players.push({ id: socket.id, role: null, hand: [] });
+        room.players.push({ id: socket.id, role: null, hand: [], tools: { cart: true, lantern: true, pickaxe: true } });
         socket.join(roomId);
         io.to(roomId).emit('playerJoined', { playerCount: room.players.length });
+        broadcastRoomPlayers(roomId);
         socket.emit('roomJoined', { roomId, isHost: false });
     });
 
@@ -273,9 +290,86 @@ io.on('connection', (socket) => {
         }
 
         if (playerIndex !== room.currentPlayerIndex) { socket.emit('errorMsg', '还没轮到你出牌！'); return; }
+
+        // 行动牌处理
+        if (card.type === 'action') {
+            const { subType } = card;
+            // 所有行动牌使用后都弃掉并抽新牌，然后换下一位
+            if (subType === 'sabotage' || subType === 'repair') {
+                const { targetPlayerId } = data || {};
+                if (!targetPlayerId) {
+                    socket.emit('errorMsg', '请先选择一个目标玩家！');
+                    return;
+                }
+                const target = players.find(p => p.id === targetPlayerId);
+                if (!target) {
+                    socket.emit('errorMsg', '目标玩家不存在！');
+                    return;
+                }
+                if (!target.tools) target.tools = { cart: true, lantern: true, pickaxe: true };
+
+                if (subType === 'sabotage') {
+                    const tool = card.tool;
+                    if (!tool) {
+                        socket.emit('errorMsg', '这张破坏牌数据有误。');
+                    } else {
+                        target.tools[tool] = false;
+                        io.to(roomId).emit('gameMsg', `玩家 ${target.id} 的 ${tool} 被破坏了！`);
+                    }
+                } else if (subType === 'repair') {
+                    const tools = card.tools || [];
+                    let repaired = false;
+                    for (const t of tools) {
+                        if (target.tools[t] === false) {
+                            target.tools[t] = true;
+                            repaired = true;
+                            io.to(roomId).emit('gameMsg', `玩家 ${target.id} 的 ${t} 被修好了！`);
+                            break;
+                        }
+                    }
+                    if (!repaired) {
+                        socket.emit('errorMsg', '目标玩家对应的工具没有损坏，修理失败。');
+                    }
+                }
+            } else if (subType === 'map') {
+                const coord = `${targetX},${targetY}`;
+                const gCard = room.board[coord];
+                if (!gCard || gCard.type !== 'goal') {
+                    socket.emit('errorMsg', '地图只能用于查看终点卡！');
+                } else {
+                    socket.emit('mapResult', { coord, isTreasure: !!gCard.isTreasure });
+                }
+            } else if (subType === 'rockfall') {
+                const coord = `${targetX},${targetY}`;
+                const bCard = room.board[coord];
+                if (!bCard || bCard.type === 'start' || bCard.type === 'goal') {
+                    socket.emit('errorMsg', '落石只能移除普通道路牌，不能移除起点或终点！');
+                } else {
+                    delete room.board[coord];
+                    io.to(roomId).emit('boardUpdated', room.board);
+                    io.to(roomId).emit('gameMsg', `一张道路牌在 ${coord} 被落石摧毁了！`);
+                }
+            }
+
+            // 行动牌从手牌中移除并抽一张新牌
+            player.hand = player.hand.filter(c => c.id !== card.id);
+            if (room.deck.length > 0) player.hand.push(room.deck.pop());
+            socket.emit('handUpdated', { yourHand: player.hand });
+
+            // 行动牌使用后直接轮到下一位
+            room.currentPlayerIndex = (room.currentPlayerIndex + 1) % players.length;
+            io.to(roomId).emit('turnUpdated', { currentTurnId: players[room.currentPlayerIndex].id });
+            return;
+        }
+
+        // 下面是道路牌逻辑
         const coord = `${targetX},${targetY}`;
 
-        if (card.type === 'action') { socket.emit('errorMsg', '行动卡不能铺在桌面上！'); return; }
+        // 工具被破坏时不能铺路
+        if (player.tools && (player.tools.cart === false || player.tools.lantern === false || player.tools.pickaxe === false)) {
+            socket.emit('errorMsg', '你的工具被破坏了，暂时不能铺路！');
+            return;
+        }
         if (room.board[coord]) { socket.emit('errorMsg', '位置被占用了！'); return; }
 
         // --- 核心：连通性判定算法 ---
@@ -405,6 +499,7 @@ io.on('connection', (socket) => {
             if (idx !== -1) {
                 room.players.splice(idx, 1);
                 io.to(roomId).emit('playerLeft', { playerCount: room.players.length });
+                broadcastRoomPlayers(roomId);
                 break;
             }
         }
