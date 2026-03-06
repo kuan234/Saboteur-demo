@@ -48,6 +48,7 @@
             <button onclick="createRoom()">创建房间</button>
             <button onclick="joinRoom()">加入房间</button>
             <button id="start-btn" onclick="startGame()" style="margin-left:8px;">▶ 开始游戏 (房主)</button>
+            <button id="voice-btn" onclick="toggleVoice()" style="margin-left:8px;background:#16a085;">🎙 开启语音</button>
         </div>
     </div>
 
@@ -73,6 +74,8 @@
         let isHost = false;
         let selectedTargetPlayerId = null;
         let myPlayerKey = null;
+        let localStream = null;
+        const peers = {}; // remoteSocketId -> RTCPeerConnection
 
         socket.on('playerJoined', data => document.getElementById('player-count').innerText = data.playerCount);
         socket.on('playerLeft', data => document.getElementById('player-count').innerText = data.playerCount);
@@ -145,6 +148,114 @@
                 };
                 listDiv.appendChild(div);
             });
+        });
+
+        function createPeerConnection(remoteId) {
+            if (peers[remoteId]) return peers[remoteId];
+            const pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
+            peers[remoteId] = pc;
+
+            if (localStream) {
+                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+            }
+
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('voice-ice-candidate', {
+                        targetId: remoteId,
+                        candidate: event.candidate
+                    });
+                }
+            };
+
+            pc.ontrack = (event) => {
+                let audio = document.getElementById('audio-' + remoteId);
+                if (!audio) {
+                    audio = document.createElement('audio');
+                    audio.id = 'audio-' + remoteId;
+                    audio.autoplay = true;
+                    audio.style.display = 'none';
+                    document.body.appendChild(audio);
+                }
+                audio.srcObject = event.streams[0];
+            };
+
+            return pc;
+        }
+
+        async function toggleVoice() {
+            const btn = document.getElementById('voice-btn');
+            if (!localStream) {
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    btn.innerText = '🔇 关闭语音';
+                    btn.style.background = '#7f8c8d';
+                    // 为当前已知玩家创建连接并发起 offer
+                    document.querySelectorAll('.player-item').forEach(el => {
+                        const label = el.innerText;
+                        // 自己不需要连
+                    });
+                    // 实际连接在收到 roomPlayers 后按需建立
+                } catch (e) {
+                    alert('获取麦克风失败：' + e.message);
+                }
+            } else {
+                // 关闭本地音轨和所有连接
+                localStream.getTracks().forEach(t => t.stop());
+                localStream = null;
+                Object.values(peers).forEach(pc => pc.close());
+                for (const id in peers) delete peers[id];
+                btn.innerText = '🎙 开启语音';
+                btn.style.background = '#16a085';
+            }
+        }
+
+        async function callPeer(remoteId) {
+            if (!localStream) return;
+            const pc = createPeerConnection(remoteId);
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socket.emit('voice-offer', { targetId: remoteId, offer });
+        }
+
+        socket.on('voice-offer', async (data) => {
+            const { from, offer } = data || {};
+            if (!offer) return;
+            if (!localStream) {
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const btn = document.getElementById('voice-btn');
+                    btn.innerText = '🔇 关闭语音';
+                    btn.style.background = '#7f8c8d';
+                } catch (e) {
+                    return;
+                }
+            }
+            const pc = createPeerConnection(from);
+            await pc.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.emit('voice-answer', { targetId: from, answer });
+        });
+
+        socket.on('voice-answer', async (data) => {
+            const { from, answer } = data || {};
+            const pc = peers[from];
+            if (!pc || !answer) return;
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        });
+
+        socket.on('voice-ice-candidate', async (data) => {
+            const { from, candidate } = data || {};
+            const pc = peers[from];
+            if (!pc || !candidate) return;
+            try {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (e) {
+                console.error('Error adding ICE candidate', e);
+            }
         });
 
         function startGame() {

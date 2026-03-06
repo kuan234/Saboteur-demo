@@ -560,6 +560,25 @@ io.on('connection', (socket) => {
             }
         }
     });
+
+    // 语音信令转发（WebRTC）
+    socket.on('voice-offer', (data) => {
+        const { targetId, offer } = data || {};
+        if (!targetId || !offer) return;
+        io.to(targetId).emit('voice-offer', { from: socket.id, offer });
+    });
+
+    socket.on('voice-answer', (data) => {
+        const { targetId, answer } = data || {};
+        if (!targetId || !answer) return;
+        io.to(targetId).emit('voice-answer', { from: socket.id, answer });
+    });
+
+    socket.on('voice-ice-candidate', (data) => {
+        const { targetId, candidate } = data || {};
+        if (!targetId || !candidate) return;
+        io.to(targetId).emit('voice-ice-candidate', { from: socket.id, candidate });
+    });
 });
 
 const PORT = process.env.PORT || 3000;
