@@ -191,6 +191,86 @@
         .player-item.current {
             border: 2px solid #f1c40f;
         }
+
+        /* 聊天室 */
+        #chat-panel {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 300px;
+            max-height: 400px;
+            background: rgba(26, 37, 47, 0.95);
+            border-radius: 10px;
+            border: 1px solid #34495e;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        #chat-panel .chat-header {
+            padding: 8px 12px;
+            background: #34495e;
+            border-radius: 10px 10px 0 0;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+            max-height: 280px;
+            min-height: 80px;
+            font-size: 13px;
+        }
+
+        #chat-messages .chat-msg {
+            margin-bottom: 6px;
+            line-height: 1.4;
+        }
+
+        #chat-messages .chat-msg .chat-name {
+            color: #f1c40f;
+            font-weight: bold;
+        }
+
+        #chat-messages .chat-msg .chat-time {
+            color: #7f8c8d;
+            font-size: 11px;
+            margin-left: 6px;
+        }
+
+        #chat-input-area {
+            display: flex;
+            border-top: 1px solid #34495e;
+        }
+
+        #chat-input-area input {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            background: #2c3e50;
+            color: white;
+            font-size: 13px;
+            border-radius: 0 0 0 10px;
+            outline: none;
+        }
+
+        #chat-input-area button {
+            padding: 8px 12px;
+            font-size: 13px;
+            border-radius: 0 0 10px 0;
+            background: #16a085;
+        }
+
+        #chat-input-area button:hover {
+            background: #1abc9c;
+        }
     </style>
 </head>
 
@@ -205,7 +285,9 @@
         </div>
         <div>
             <input id="name-input" placeholder="输入昵称"
-                style="width:110px;padding:6px;border-radius:4px;border:none;margin-right:8px;">
+                style="width:110px;padding:6px;border-radius:4px;border:none;margin-right:4px;">
+            <button onclick="confirmName()"
+                style="background:#3498db;padding:6px 10px;font-size:13px;margin-right:8px;">✔ 确认名字</button>
             <input id="room-input" placeholder="房间号"
                 style="width:80px;padding:6px;border-radius:4px;border:none;margin-right:8px;">
             <button onclick="createRoom()">创建房间</button>
@@ -220,7 +302,8 @@
     </div>
 
     <div id="player-area">
-        <div>你的隐藏身份: <span id="my-role" class="role-text"></span></div>
+        <div><span id="my-name" style="color:#3498db;font-weight:bold;"></span> | 你的隐藏身份: <span id="my-role"
+                class="role-text"></span></div>
         <div id="turn-status" style="color: #f1c40f; font-size: 1.2em; font-weight: bold; margin-top: 10px;">等待游戏开始...
         </div>
         <div id="round-info" style="margin-top:6px;color:#bdc3c7;font-size:0.9em;">第 1 / 3 轮</div>
@@ -231,6 +314,21 @@
         <div id="my-hand"></div>
     </div>
 
+    <!-- 聊天室 -->
+    <div id="chat-panel" style="display:none;">
+        <div class="chat-header" onclick="toggleChatPanel()">
+            <span>💬 聊天室</span>
+            <span id="chat-toggle">▼</span>
+        </div>
+        <div id="chat-body">
+            <div id="chat-messages"></div>
+            <div id="chat-input-area">
+                <input id="chat-input" placeholder="输入消息..." maxlength="200" />
+                <button onclick="sendChatMessage()">发送</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
@@ -239,22 +337,39 @@
         let isHost = false;
         let selectedTargetPlayerId = null;
         let myPlayerKey = null;
+        let myName = '';
         let localStream = null;
         const peers = {}; // remoteSocketId -> RTCPeerConnection
 
         socket.on('playerJoined', data => document.getElementById('player-count').innerText = data.playerCount);
         socket.on('playerLeft', data => document.getElementById('player-count').innerText = data.playerCount);
 
+        // 确认/修改名字
+        function confirmName() {
+            const newName = document.getElementById('name-input').value.trim();
+            if (!newName) { alert('请输入昵称！'); return; }
+            myName = newName;
+            document.getElementById('my-name').innerText = myName;
+            if (currentRoomId) {
+                socket.emit('changeName', { roomId: currentRoomId, newName: myName });
+            }
+        }
+
+        socket.on('nameChanged', (data) => {
+            myName = data.name;
+            document.getElementById('my-name').innerText = myName;
+        });
+
         function createRoom() {
-            const name = document.getElementById('name-input').value.trim() || '玩家';
-            socket.emit('createRoom', { name });
+            myName = document.getElementById('name-input').value.trim() || '玩家';
+            socket.emit('createRoom', { name: myName });
         }
 
         function joinRoom() {
             const roomId = document.getElementById('room-input').value.trim();
             if (!roomId) { alert('请输入房间号'); return; }
-            const name = document.getElementById('name-input').value.trim() || '玩家';
-            socket.emit('joinRoom', { roomId, name });
+            myName = document.getElementById('name-input').value.trim() || '玩家';
+            socket.emit('joinRoom', { roomId, name: myName });
         }
 
         socket.on('roomJoined', data => {
@@ -263,6 +378,8 @@
             myPlayerKey = data.playerKey;
             document.getElementById('room-id').innerText = currentRoomId;
             document.getElementById('start-btn').disabled = !isHost;
+            document.getElementById('chat-panel').style.display = 'flex';
+            document.getElementById('my-name').innerText = myName;
             // 把身份信息存到本地，用于断线重连
             try {
                 localStorage.setItem('saboteur_roomId', currentRoomId);
@@ -287,6 +404,9 @@
             document.getElementById('room-id').innerText = currentRoomId;
             document.getElementById('tabletop').style.display = 'block';
             document.getElementById('player-area').style.display = 'block';
+            document.getElementById('chat-panel').style.display = 'flex';
+            myName = data.yourName || myName;
+            document.getElementById('my-name').innerText = myName;
             document.getElementById('my-role').innerText = data.yourRole || '';
             document.getElementById('turn-status').innerText = '已重连，等待轮到你出牌...';
             renderHand(data.yourHand || []);
@@ -342,7 +462,11 @@
         });
 
         function createPeerConnection(remoteId) {
-            if (peers[remoteId]) return peers[remoteId];
+            // 如果已有连接，清理旧连接重建（避免 stale 状态）
+            if (peers[remoteId]) {
+                try { peers[remoteId].close(); } catch (e) { }
+                delete peers[remoteId];
+            }
             const pc = new RTCPeerConnection({
                 iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
             });
@@ -390,6 +514,10 @@
                             callPeer(remoteId);
                         }
                     });
+                    // 广播通知其他玩家自己已开启语音
+                    if (currentRoomId) {
+                        socket.emit('voice-enabled', { roomId: currentRoomId });
+                    }
                 } catch (e) {
                     alert('获取麦克风失败：' + e.message);
                 }
@@ -460,6 +588,8 @@
         socket.on('gameStarted', (data) => {
             document.getElementById('tabletop').style.display = 'block';
             document.getElementById('player-area').style.display = 'block';
+            document.getElementById('chat-panel').style.display = 'flex';
+            document.getElementById('my-name').innerText = myName;
             document.getElementById('my-role').innerText = data.yourRole;
             document.getElementById('turn-status').innerText = '等待轮到你出牌...';
             renderHand(data.yourHand);
@@ -585,6 +715,11 @@
                 cardEl.style.top = `${baseY + y * cardHeight}px`;
 
                 cardEl.innerHTML = `<div class="card-symbol">${card.name}</div>`;
+                // 应用旋转
+                if (card.rotation) {
+                    const sym = cardEl.querySelector('.card-symbol');
+                    if (sym) sym.style.transform = `rotate(${card.rotation}deg)`;
+                }
 
                 if (card.type === 'start') cardEl.className = 'card board-card start-card';
                 else if (card.type === 'goal') {
@@ -601,8 +736,8 @@
             if (!selectedCard) { alert("请先在下方选中一张手牌！"); return; }
             if (!currentRoomId) { alert("你还没有加入房间！"); return; }
             const rect = document.getElementById('board-grid').getBoundingClientRect();
-            const gridX = Math.round((event.clientX - rect.left - 100) / 80);
-            const gridY = Math.round((event.clientY - rect.top - 350) / 110);
+            const gridX = Math.floor((event.clientX - rect.left - 100 + 40) / 80);
+            const gridY = Math.floor((event.clientY - rect.top - 350 + 55) / 110);
 
             // 道路牌：正常铺路；行动牌：根据子类型决定用法
             const payload = { roomId: currentRoomId, card: selectedCard, targetX: gridX, targetY: gridY };
@@ -693,6 +828,50 @@
                 statusDiv.innerText = "⏳ 等待其他玩家出牌...";
                 statusDiv.style.color = "#e74c3c";
             }
+        });
+
+        // 聊天室功能
+        function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const msg = input.value.trim();
+            if (!msg || !currentRoomId) return;
+            socket.emit('chatMessage', { roomId: currentRoomId, message: msg });
+            input.value = '';
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && document.activeElement === document.getElementById('chat-input')) {
+                sendChatMessage();
+            }
+        });
+
+        function toggleChatPanel() {
+            const body = document.getElementById('chat-body');
+            const toggle = document.getElementById('chat-toggle');
+            if (body.style.display === 'none') {
+                body.style.display = 'block';
+                toggle.innerText = '▼';
+            } else {
+                body.style.display = 'none';
+                toggle.innerText = '▲';
+            }
+        }
+
+        socket.on('chatMessage', data => {
+            const msgDiv = document.getElementById('chat-messages');
+            const el = document.createElement('div');
+            el.className = 'chat-msg';
+            el.innerHTML = `<span class="chat-name">${data.name}</span><span class="chat-time">${data.time}</span><br>${data.message}`;
+            msgDiv.appendChild(el);
+            msgDiv.scrollTop = msgDiv.scrollHeight;
+        });
+
+        // 当其他玩家开启语音时，如果自己也已开启，自动连接
+        socket.on('voice-enabled', async (data) => {
+            const { from } = data || {};
+            if (!from || !localStream) return;
+            // 对方刚开启语音，主动向对方发起连接
+            callPeer(from);
         });
     </script>
 </body>

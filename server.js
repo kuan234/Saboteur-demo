@@ -362,6 +362,18 @@ io.on('connection', (socket) => {
         startGame(roomId);
     });
 
+    // 修改名字
+    socket.on('changeName', (data) => {
+        const { roomId, newName } = data || {};
+        const room = rooms[roomId];
+        if (!room) return;
+        const player = room.players.find(p => p.id === socket.id);
+        if (!player) return;
+        player.name = String(newName || '玩家').trim().slice(0, 20);
+        broadcastRoomPlayers(roomId);
+        socket.emit('nameChanged', { name: player.name });
+    });
+
     socket.on('playCard', (data) => {
         const { roomId, card, targetX, targetY } = data || {};
         const room = rooms[roomId];
@@ -507,7 +519,7 @@ io.on('connection', (socket) => {
         if (!connectToPath) { socket.emit('errorMsg', '死路！你必须至少连接一条现有的通路！'); return; }
 
         // 校验通过，放牌！
-        room.board[coord] = { type: card.type, name: card.name, dirs: card.dirs, faceUp: true };
+        room.board[coord] = { type: card.type, name: card.name, dirs: card.dirs, rotation: card.rotation || 0, faceUp: true };
         player.hand = player.hand.filter(c => c.id !== card.id);
         if (room.deck.length > 0) player.hand.push(room.deck.pop());
 
@@ -595,6 +607,26 @@ io.on('connection', (socket) => {
                 break;
             }
         }
+    });
+    // 聊天消息
+    socket.on('chatMessage', (data) => {
+        const { roomId, message } = data || {};
+        const room = rooms[roomId];
+        if (!room || !message) return;
+        const player = room.players.find(p => p.id === socket.id);
+        const name = (player && player.name) || '匿名';
+        io.to(roomId).emit('chatMessage', {
+            name,
+            message: String(message).slice(0, 200),
+            time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+        });
+    });
+
+    // 语音状态广播：通知房间内所有人某玩家已开启语音
+    socket.on('voice-enabled', (data) => {
+        const { roomId } = data || {};
+        if (!roomId) return;
+        socket.to(roomId).emit('voice-enabled', { from: socket.id });
     });
 
     // 语音信令转发（WebRTC）
