@@ -32,6 +32,7 @@
         #player-list { margin-top: 8px; font-size: 0.85em; }
         .player-item { display: inline-block; padding: 4px 8px; margin-right: 6px; border-radius: 4px; background:#2c3e50; cursor:pointer; }
         .player-item.selected { background:#16a085; }
+        .player-item.current { border: 2px solid #f1c40f; }
     </style>
 </head>
 <body>
@@ -44,7 +45,8 @@
             </p>
         </div>
         <div>
-            <input id="room-input" placeholder="输入房间号" style="width:100px;padding:6px;border-radius:4px;border:none;margin-right:8px;">
+            <input id="name-input" placeholder="输入昵称" style="width:110px;padding:6px;border-radius:4px;border:none;margin-right:8px;">
+            <input id="room-input" placeholder="房间号" style="width:80px;padding:6px;border-radius:4px;border:none;margin-right:8px;">
             <button onclick="createRoom()">创建房间</button>
             <button onclick="joinRoom()">加入房间</button>
             <button id="start-btn" onclick="startGame()" style="margin-left:8px;">▶ 开始游戏 (房主)</button>
@@ -81,13 +83,15 @@
         socket.on('playerLeft', data => document.getElementById('player-count').innerText = data.playerCount);
 
         function createRoom() {
-            socket.emit('createRoom');
+            const name = document.getElementById('name-input').value.trim() || '玩家';
+            socket.emit('createRoom', { name });
         }
 
         function joinRoom() {
             const roomId = document.getElementById('room-input').value.trim();
             if (!roomId) { alert('请输入房间号'); return; }
-            socket.emit('joinRoom', { roomId });
+            const name = document.getElementById('name-input').value.trim() || '玩家';
+            socket.emit('joinRoom', { roomId, name });
         }
 
         socket.on('roomJoined', data => {
@@ -135,12 +139,31 @@
 
         socket.on('roomPlayers', data => {
             const listDiv = document.getElementById('player-list');
-            listDiv.innerHTML = '选择目标玩家：';
-            data.players.forEach(p => {
+            listDiv.innerHTML = '玩家顺序（点击选择行动目标）：';
+            data.players.forEach((p, index) => {
                 const div = document.createElement('span');
-                div.className = 'player-item' + (p.id === selectedTargetPlayerId ? ' selected' : '');
-                const label = p.id === socket.id ? '自己' : p.id.slice(0, 4);
-                div.innerText = label;
+                div.className = 'player-item';
+                div.dataset.id = p.id;
+
+                const displayName = p.name || p.id.slice(0, 4);
+                const seatNo = index + 1;
+
+                // 工具状态图标
+                let toolsHtml = '';
+                if (p.tools) {
+                    const icon = (ok) => ok ? '✔' : '✖';
+                    toolsHtml = ` <span style="font-size:10px;">[车${icon(p.tools.cart)} 灯${icon(p.tools.lantern)} 镐${icon(p.tools.pickaxe)}]</span>`;
+                }
+
+                div.innerHTML = `${seatNo}. ${displayName}${p.disconnected ? ' (掉线)' : ''}${toolsHtml}`;
+
+                if (p.id === selectedTargetPlayerId) {
+                    div.classList.add('selected');
+                }
+                if (p.isCurrentTurn) {
+                    div.classList.add('current');
+                }
+
                 div.onclick = () => {
                     selectedTargetPlayerId = p.id;
                     document.querySelectorAll('.player-item').forEach(el => el.classList.remove('selected'));
@@ -439,7 +462,18 @@
 
         // 第三轮后整局结束
         socket.on('finalGameOver', data => {
-            alert(data.msg + `\n第 3 轮结束，整局游戏结束！`);
+            // 身份揭露
+            let minerNames = [];
+            let saboteurNames = [];
+            if (Array.isArray(data.players)) {
+                data.players.forEach(p => {
+                    const name = p.name || p.playerKey?.slice(0, 4) || '';
+                    if (p.role === 'Gold Miner') minerNames.push(name);
+                    if (p.role === 'Saboteur') saboteurNames.push(name);
+                });
+            }
+            const rolesText = `\n\n矿工: ${minerNames.join('、') || '无'}\n破坏者: ${saboteurNames.join('、') || '无'}`;
+            alert(data.msg + `\n第 3 轮结束，整局游戏结束！` + rolesText);
             updateScoresView(data);
             const statusDiv = document.getElementById('turn-status');
             statusDiv.innerText = "整局结束，刷新页面可重新开始新房间。";

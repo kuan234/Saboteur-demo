@@ -11,7 +11,7 @@ app.use(express.static('public'));
 // 多房间结构：每个房间都有自己的一套状态
 // rooms[roomId] = {
 //   hostId,
-//   players: [{ id, playerKey, role, hand, tools, disconnected }],
+//   players: [{ id, playerKey, name, role, hand, tools, disconnected }],
 //   deck,
 //   setAsideRoleCard,
 //   board,
@@ -94,12 +94,15 @@ function createRoom(roomId, hostSocketId) {
 function broadcastRoomPlayers(roomId) {
     const room = rooms[roomId];
     if (!room) return;
+    const currentTurnId = room.players[room.currentPlayerIndex]?.id || null;
     io.to(roomId).emit('roomPlayers', {
         players: room.players.map(p => ({
             id: p.id,
             playerKey: p.playerKey,
+            name: p.name || '',
             role: p.role || null,
-            disconnected: !!p.disconnected
+            disconnected: !!p.disconnected,
+            isCurrentTurn: currentTurnId && p.id === currentTurnId
         }))
     });
 }
@@ -125,7 +128,7 @@ function finishRound(roomId, winners, msg, connectorPlayerId) {
 
     if (winners === 'Gold Miner') {
         // 简化版：每个好矮人随机获得 1-3 金块
-        miners.forEach(p => {
+    miners.forEach(p => {
             const gain = 1 + Math.floor(Math.random() * 3);
             room.scores[p.playerKey] += gain;
             scoreDelta[p.playerKey] = gain;
@@ -148,7 +151,13 @@ function finishRound(roomId, winners, msg, connectorPlayerId) {
         winners,
         msg,
         scores: room.scores,
-        delta: scoreDelta
+        delta: scoreDelta,
+        players: room.players.map(p => ({
+            playerKey: p.playerKey,
+            name: p.name || '',
+            role: p.role,
+            disconnected: !!p.disconnected
+        }))
     };
 
     if (room.round < 3) {
@@ -278,6 +287,7 @@ io.on('connection', (socket) => {
         socket.emit('reconnectedState', {
             roomId,
             yourRole: player.role,
+            yourName: player.name || '',
             yourHand: player.hand,
             board: room.board,
             round: room.round,
@@ -288,7 +298,8 @@ io.on('connection', (socket) => {
         broadcastRoomPlayers(roomId);
     });
 
-    socket.on('createRoom', () => {
+    socket.on('createRoom', (data) => {
+        const name = (data && data.name && String(data.name).trim()) || '玩家';
         let roomId;
         do {
             roomId = Math.floor(1000 + Math.random() * 9000).toString();
@@ -297,7 +308,15 @@ io.on('connection', (socket) => {
         createRoom(roomId, socket.id);
         const room = rooms[roomId];
         const playerKey = Math.random().toString(36).slice(2, 10);
-        room.players.push({ id: socket.id, playerKey, role: null, hand: [], tools: { cart: true, lantern: true, pickaxe: true }, disconnected: false });
+        room.players.push({
+            id: socket.id,
+            playerKey,
+            name,
+            role: null,
+            hand: [],
+            tools: { cart: true, lantern: true, pickaxe: true },
+            disconnected: false
+        });
         socket.join(roomId);
 
         io.to(roomId).emit('playerJoined', { playerCount: room.players.length });
@@ -307,13 +326,22 @@ io.on('connection', (socket) => {
 
     socket.on('joinRoom', (data) => {
         const { roomId } = data || {};
+        const name = (data && data.name && String(data.name).trim()) || '玩家';
         const room = rooms[roomId];
         if (!room) {
             socket.emit('errorMsg', '房间不存在！');
             return;
         }
         const playerKey = Math.random().toString(36).slice(2, 10);
-        room.players.push({ id: socket.id, playerKey, role: null, hand: [], tools: { cart: true, lantern: true, pickaxe: true }, disconnected: false });
+        room.players.push({
+            id: socket.id,
+            playerKey,
+            name,
+            role: null,
+            hand: [],
+            tools: { cart: true, lantern: true, pickaxe: true },
+            disconnected: false
+        });
         socket.join(roomId);
         io.to(roomId).emit('playerJoined', { playerCount: room.players.length });
         broadcastRoomPlayers(roomId);
@@ -370,7 +398,8 @@ io.on('connection', (socket) => {
                         socket.emit('errorMsg', '这张破坏牌数据有误。');
                     } else {
                         target.tools[tool] = false;
-                        io.to(roomId).emit('gameMsg', `玩家 ${target.id} 的 ${tool} 被破坏了！`);
+                        io.to(roomId).emit('gameMsg', `玩家 ${target.name || target.id} 的 ${tool} 被破坏了。`);
+                        broadcastRoomPlayers(roomId);
                     }
                 } else if (subType === 'repair') {
                     const tools = card.tools || [];
@@ -379,12 +408,14 @@ io.on('connection', (socket) => {
                         if (target.tools[t] === false) {
                             target.tools[t] = true;
                             repaired = true;
-                            io.to(roomId).emit('gameMsg', `玩家 ${target.id} 的 ${t} 被修好了！`);
+                            io.to(roomId).emit('gameMsg', `玩家 ${target.name || target.id} 的 ${t} 被修好了。`);
                             break;
                         }
                     }
                     if (!repaired) {
                         socket.emit('errorMsg', '目标玩家对应的工具没有损坏，修理失败。');
+                    } else {
+                        broadcastRoomPlayers(roomId);
                     }
                 }
             } else if (subType === 'map') {
