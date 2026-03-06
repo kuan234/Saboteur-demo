@@ -91,6 +91,8 @@ function createRoom(roomId, hostSocketId) {
     };
 }
 
+const toolNames = { cart: '矿车', lantern: '油灯', pickaxe: '镐子' };
+
 function broadcastRoomPlayers(roomId) {
     const room = rooms[roomId];
     if (!room) return;
@@ -101,6 +103,7 @@ function broadcastRoomPlayers(roomId) {
             playerKey: p.playerKey,
             name: p.name || '',
             role: p.role || null,
+            tools: p.tools || { cart: true, lantern: true, pickaxe: true },
             disconnected: !!p.disconnected,
             isCurrentTurn: currentTurnId && p.id === currentTurnId
         }))
@@ -399,7 +402,7 @@ io.on('connection', (socket) => {
                         return;
                     }
                     target.tools[tool] = false;
-                    io.to(roomId).emit('gameMsg', `玩家 ${target.name || target.id} 的 ${tool} 被破坏了。`);
+                    io.to(roomId).emit('gameMsg', `玩家 ${target.name || target.id} 的 ${toolNames[tool] || tool} 被破坏了！`);
                     broadcastRoomPlayers(roomId);
                 } else if (subType === 'repair') {
                     const tools = card.tools || [];
@@ -408,7 +411,7 @@ io.on('connection', (socket) => {
                         if (target.tools[t] === false) {
                             target.tools[t] = true;
                             repaired = true;
-                            io.to(roomId).emit('gameMsg', `玩家 ${target.name || target.id} 的 ${t} 被修好了。`);
+                            io.to(roomId).emit('gameMsg', `玩家 ${target.name || target.id} 的 ${toolNames[t] || t} 被修好了！`);
                             break;
                         }
                     }

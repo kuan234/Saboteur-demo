@@ -1,42 +1,199 @@
 <!DOCTYPE html>
 <html lang="zh">
+
 <head>
     <meta charset="UTF-8">
     <title>矮人矿坑 - 游戏大厅</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #2c3e50; color: white; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; }
-        .header { display: flex; justify-content: space-between; align-items: center; background: #34495e; padding: 10px 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        button { background: #e67e22; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        button:hover { background: #d35400; }
-        
-        #tabletop { flex: 1; background-color: #3e2723; margin: 20px 0; border-radius: 10px; position: relative; overflow: auto; display: none; border: 5px solid #5d4037; box-shadow: inset 0 0 50px rgba(0,0,0,0.8); }
-        .grid-container { position: relative; width: 1500px; height: 800px; cursor: crosshair; }
-        .grid-cell { position: absolute; width: 80px; height: 110px; border: 1px dashed rgba(255,255,255,0.15); box-sizing: border-box; pointer-events: none; }
-        .grid-cell.placeable { border-color: rgba(46,204,113,0.45); background: rgba(46,204,113,0.08); }
-        
-        .card { width: 70px; height: 100px; background: #ecf0f1; color: #2c3e50; border-radius: 6px; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; border: 2px solid #bdc3c7; cursor: pointer; user-select: none; position: relative; transition: transform 0.2s, box-shadow 0.2s; }
-        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #2c3e50;
+            color: white;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #34495e;
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        button {
+            background: #e67e22;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #d35400;
+        }
+
+        #tabletop {
+            flex: 1;
+            background-color: #3e2723;
+            margin: 20px 0;
+            border-radius: 10px;
+            position: relative;
+            overflow: auto;
+            display: none;
+            border: 5px solid #5d4037;
+            box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.8);
+        }
+
+        .grid-container {
+            position: relative;
+            width: 1500px;
+            height: 800px;
+            cursor: crosshair;
+        }
+
+        .grid-cell {
+            position: absolute;
+            width: 80px;
+            height: 110px;
+            border: 1px dashed rgba(255, 255, 255, 0.15);
+            box-sizing: border-box;
+            pointer-events: none;
+        }
+
+        .grid-cell.placeable {
+            border-color: rgba(46, 204, 113, 0.45);
+            background: rgba(46, 204, 113, 0.08);
+        }
+
+        .card {
+            width: 70px;
+            height: 100px;
+            background: #ecf0f1;
+            color: #2c3e50;
+            border-radius: 6px;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            border: 2px solid #bdc3c7;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
         /* 超大字体用来显示道路符号 */
-        .card-symbol { font-size: 60px; line-height: 60px; font-weight: normal; color: #7f8c8d; }
-        .start-card { background: #27ae60; color: white; border-color: #2ecc71; }
-        .start-card .card-symbol { color: white; font-size: 30px; font-weight: bold; }
-        .goal-card { background: #34495e; color: white; border-color: #95a5a6; }
-        .goal-card .card-symbol { color: #bdc3c7; font-size: 30px; }
-        
-        .board-card { position: absolute; }
-        #player-area { background: #1a252f; padding: 15px; border-radius: 8px; display: none; }
-        #my-hand { display: flex; gap: 10px; margin-top: 10px; }
-        .hand-card { transition: transform 0.2s; }
-        .hand-card:hover { transform: translateY(-10px); background: #f1c40f; border-color: #f39c12; }
-        .hand-card.selected { transform: translateY(-20px); background: #f1c40f; border: 3px solid #e74c3c; box-shadow: 0 0 15px rgba(231, 76, 60, 0.8); }
-        .role-text { color: #e74c3c; font-size: 1.2em; font-weight: bold; }
-        #score-board { margin-top: 10px; font-size: 0.9em; color: #ecf0f1; }
-        #player-list { margin-top: 8px; font-size: 0.85em; }
-        .player-item { display: inline-block; padding: 4px 8px; margin-right: 6px; border-radius: 4px; background:#2c3e50; cursor:pointer; }
-        .player-item.selected { background:#16a085; }
-        .player-item.current { border: 2px solid #f1c40f; }
+        .card-symbol {
+            font-size: 60px;
+            line-height: 60px;
+            font-weight: normal;
+            color: #7f8c8d;
+        }
+
+        .start-card {
+            background: #27ae60;
+            color: white;
+            border-color: #2ecc71;
+        }
+
+        .start-card .card-symbol {
+            color: white;
+            font-size: 30px;
+            font-weight: bold;
+        }
+
+        .goal-card {
+            background: #34495e;
+            color: white;
+            border-color: #95a5a6;
+        }
+
+        .goal-card .card-symbol {
+            color: #bdc3c7;
+            font-size: 30px;
+        }
+
+        .board-card {
+            position: absolute;
+        }
+
+        #player-area {
+            background: #1a252f;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        #my-hand {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .hand-card {
+            transition: transform 0.2s;
+        }
+
+        .hand-card:hover {
+            transform: translateY(-10px);
+            background: #f1c40f;
+            border-color: #f39c12;
+        }
+
+        .hand-card.selected {
+            transform: translateY(-20px);
+            background: #f1c40f;
+            border: 3px solid #e74c3c;
+            box-shadow: 0 0 15px rgba(231, 76, 60, 0.8);
+        }
+
+        .role-text {
+            color: #e74c3c;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        #score-board {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #ecf0f1;
+        }
+
+        #player-list {
+            margin-top: 8px;
+            font-size: 0.85em;
+        }
+
+        .player-item {
+            display: inline-block;
+            padding: 4px 8px;
+            margin-right: 6px;
+            border-radius: 4px;
+            background: #2c3e50;
+            cursor: pointer;
+        }
+
+        .player-item.selected {
+            background: #16a085;
+        }
+
+        .player-item.current {
+            border: 2px solid #f1c40f;
+        }
     </style>
 </head>
+
 <body>
     <div class="header">
         <div>
@@ -47,8 +204,10 @@
             </p>
         </div>
         <div>
-            <input id="name-input" placeholder="输入昵称" style="width:110px;padding:6px;border-radius:4px;border:none;margin-right:8px;">
-            <input id="room-input" placeholder="房间号" style="width:80px;padding:6px;border-radius:4px;border:none;margin-right:8px;">
+            <input id="name-input" placeholder="输入昵称"
+                style="width:110px;padding:6px;border-radius:4px;border:none;margin-right:8px;">
+            <input id="room-input" placeholder="房间号"
+                style="width:80px;padding:6px;border-radius:4px;border:none;margin-right:8px;">
             <button onclick="createRoom()">创建房间</button>
             <button onclick="joinRoom()">加入房间</button>
             <button id="start-btn" onclick="startGame()" style="margin-left:8px;">▶ 开始游戏 (房主)</button>
@@ -62,11 +221,13 @@
 
     <div id="player-area">
         <div>你的隐藏身份: <span id="my-role" class="role-text"></span></div>
-        <div id="turn-status" style="color: #f1c40f; font-size: 1.2em; font-weight: bold; margin-top: 10px;">等待游戏开始...</div>
+        <div id="turn-status" style="color: #f1c40f; font-size: 1.2em; font-weight: bold; margin-top: 10px;">等待游戏开始...
+        </div>
         <div id="round-info" style="margin-top:6px;color:#bdc3c7;font-size:0.9em;">第 1 / 3 轮</div>
         <div id="score-board"></div>
         <div id="player-list"></div>
-        <button id="discard-btn" onclick="discardSelectedCard()" style="display:none; background: #c0392b; margin-top: 10px;">🗑️ 弃掉选中的牌 (Pass)</button>
+        <button id="discard-btn" onclick="discardSelectedCard()"
+            style="display:none; background: #c0392b; margin-top: 10px;">🗑️ 弃掉选中的牌 (Pass)</button>
         <div id="my-hand"></div>
     </div>
 
@@ -106,7 +267,7 @@
             try {
                 localStorage.setItem('saboteur_roomId', currentRoomId);
                 localStorage.setItem('saboteur_playerKey', myPlayerKey);
-            } catch (e) {}
+            } catch (e) { }
         });
 
         // 页面加载后，如果本地有记录，尝试自动重连
@@ -117,7 +278,7 @@
                 if (roomId && playerKey) {
                     socket.emit('reconnectPlayer', { roomId, playerKey });
                 }
-            } catch (e) {}
+            } catch (e) { }
         })();
 
         socket.on('reconnectedState', data => {
@@ -153,8 +314,8 @@
                 // 工具状态图标
                 let toolsHtml = '';
                 if (p.tools) {
-                    const icon = (ok) => ok ? '✔' : '✖';
-                    toolsHtml = ` <span style="font-size:10px;">[车${icon(p.tools.cart)} 灯${icon(p.tools.lantern)} 镐${icon(p.tools.pickaxe)}]</span>`;
+                    const ti = (ok, label) => ok ? `<span style="color:#2ecc71;">${label}✔</span>` : `<span style="color:#e74c3c;text-decoration:line-through;">${label}❌</span>`;
+                    toolsHtml = ` <span style="font-size:11px;">[${ti(p.tools.cart, '矿车')} ${ti(p.tools.lantern, '油灯')} ${ti(p.tools.pickaxe, '镐子')}]</span>`;
                 }
 
                 div.innerHTML = `${seatNo}. ${displayName}${p.disconnected ? ' (掉线)' : ''}${toolsHtml}`;
@@ -307,19 +468,19 @@
 
         function renderHand(hand) {
             const handDiv = document.getElementById('my-hand');
-            handDiv.innerHTML = ''; 
+            handDiv.innerHTML = '';
             hand.forEach(card => {
                 const cardDiv = document.createElement('div');
                 cardDiv.className = 'card hand-card';
                 // 使用大号字体显示道路图案
-                const label = card.type==='path' ? '道路' : (card.subType === 'sabotage' ? '破坏' :
-                                   card.subType === 'repair' ? '修理' :
-                                   card.subType === 'map' ? '地图' :
-                                   card.subType === 'rockfall' ? '落石' : '行动');
+                const label = card.type === 'path' ? '道路' : (card.subType === 'sabotage' ? '破坏' :
+                    card.subType === 'repair' ? '修理' :
+                        card.subType === 'map' ? '地图' :
+                            card.subType === 'rockfall' ? '落石' : '行动');
                 cardDiv.innerHTML = `
                     <div class="card-symbol">${card.name}</div>
                     <div style="font-size:10px;">${label}</div>
-                    ${card.type==='path'
+                    ${card.type === 'path'
                         ? '<div style="position:absolute;bottom:4px;right:4px;font-size:12px;cursor:pointer;color:#2980b9;" class="rotate-btn">↻</div>'
                         : ''
                     }
@@ -345,7 +506,7 @@
                         cardDiv.querySelector('.card-symbol').textContent = '💥';
                     }
                 }
-                
+
                 cardDiv.onclick = (e) => {
                     // 如果点的是旋转按钮，不切换选中
                     if (e.target && e.target.classList.contains('rotate-btn')) {
@@ -353,7 +514,7 @@
                     }
                     document.querySelectorAll('.hand-card').forEach(c => c.classList.remove('selected'));
                     cardDiv.classList.add('selected');
-                    selectedCard = card; 
+                    selectedCard = card;
                     document.getElementById('discard-btn').style.display = 'inline-block';
                 };
 
@@ -393,8 +554,8 @@
             const placeable = new Set();
             for (const coord of occupied) {
                 const [x, y] = coord.split(',').map(Number);
-                [[0,-1],[1,0],[0,1],[-1,0]].forEach(([dx,dy]) => {
-                    const nc = `${x+dx},${y+dy}`;
+                [[0, -1], [1, 0], [0, 1], [-1, 0]].forEach(([dx, dy]) => {
+                    const nc = `${x + dx},${y + dy}`;
                     if (!occupied.has(nc)) placeable.add(nc);
                 });
             }
@@ -422,16 +583,16 @@
                 const cardEl = document.createElement('div');
                 cardEl.style.left = `${baseX + x * cardWidth}px`;
                 cardEl.style.top = `${baseY + y * cardHeight}px`;
-                
+
                 cardEl.innerHTML = `<div class="card-symbol">${card.name}</div>`;
-                
+
                 if (card.type === 'start') cardEl.className = 'card board-card start-card';
-                else if (card.type === 'goal') { 
-                    cardEl.className = 'card board-card goal-card'; 
-                    cardEl.innerHTML = `<div class="card-symbol">${card.faceUp ? card.name : '?'}</div>`; 
+                else if (card.type === 'goal') {
+                    cardEl.className = 'card board-card goal-card';
+                    cardEl.innerHTML = `<div class="card-symbol">${card.faceUp ? card.name : '?'}</div>`;
                 }
-                else cardEl.className = 'card board-card'; 
-                
+                else cardEl.className = 'card board-card';
+
                 boardGrid.appendChild(cardEl);
             }
         }
@@ -461,7 +622,7 @@
 
         function discardSelectedCard() {
             if (!selectedCard) return;
-            if(confirm(`确定要弃掉并且跳过本回合吗？`)) {
+            if (confirm(`确定要弃掉并且跳过本回合吗？`)) {
                 if (!currentRoomId) { alert('你还没有加入房间！'); return; }
                 socket.emit('discardCard', { roomId: currentRoomId, card: selectedCard });
                 selectedCard = null;
@@ -476,7 +637,7 @@
             const text = data.isTreasure ? '这是金矿终点！' : '这是石头终点。';
             alert(`你偷看了终点 (${data.coord})：\n${text}`);
         });
-        
+
         function updateScoresView(payload) {
             const scoreDiv = document.getElementById('score-board');
             const roundDiv = document.getElementById('round-info');
@@ -535,4 +696,5 @@
         });
     </script>
 </body>
+
 </html>
