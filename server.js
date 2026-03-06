@@ -15,7 +15,9 @@ app.use(express.static('public'));
 //   deck,
 //   setAsideRoleCard,
 //   board,
-//   currentPlayerIndex
+//   currentPlayerIndex,
+//   round,
+//   scores: { [playerId]: number }
 // }
 const rooms = {};
 
@@ -67,8 +69,68 @@ function createRoom(roomId, hostSocketId) {
         deck: [],
         setAsideRoleCard: null,
         board: {},
-        currentPlayerIndex: 0
+        currentPlayerIndex: 0,
+        round: 1,
+        scores: {}
     };
+}
+
+function ensureScoreEntries(room) {
+    if (!room.scores) room.scores = {};
+    room.players.forEach(p => {
+        if (room.scores[p.id] == null) {
+            room.scores[p.id] = 0;
+        }
+    });
+}
+
+function finishRound(roomId, winners, msg, connectorPlayerId) {
+    const room = rooms[roomId];
+    if (!room) return;
+
+    ensureScoreEntries(room);
+
+    const miners = room.players.filter(p => p.role === 'Gold Miner');
+    const saboteurs = room.players.filter(p => p.role === 'Saboteur');
+    const scoreDelta = {};
+
+    if (winners === 'Gold Miner') {
+        // 简化版：每个好矮人随机获得 1-3 金块
+        miners.forEach(p => {
+            const gain = 1 + Math.floor(Math.random() * 3);
+            room.scores[p.id] += gain;
+            scoreDelta[p.id] = gain;
+        });
+    } else if (winners === 'Saboteur') {
+        // 按官方规则的总金块数：1/2~3/>=4 个坏矮人
+        const sabCount = saboteurs.length;
+        let gain = 0;
+        if (sabCount === 1) gain = 4;
+        else if (sabCount === 2 || sabCount === 3) gain = 3;
+        else if (sabCount >= 4) gain = 2;
+        saboteurs.forEach(p => {
+            room.scores[p.id] += gain;
+            scoreDelta[p.id] = gain;
+        });
+    }
+
+    const payload = {
+        round: room.round,
+        winners,
+        msg,
+        scores: room.scores,
+        delta: scoreDelta
+    };
+
+    if (room.round < 3) {
+        io.to(roomId).emit('roundOver', payload);
+        room.round += 1;
+        // 开启下一轮：重置牌堆与身份
+        startGame(roomId);
+    } else {
+        // 第 3 轮结束，整局游戏结束
+        io.to(roomId).emit('finalGameOver', payload);
+    }
 }
 
 function startGame(roomId) {
@@ -241,8 +303,8 @@ io.on('connection', (socket) => {
                 gCard.faceUp = true; // 翻开终点卡
                 if (gCard.isTreasure) {
                     gCard.name = '💎'; // 变成钻石/金块图标
-                    io.to(roomId).emit('gameOver', { winners: 'Gold Miner', msg: '🎉 恭喜！挖到了宝藏！【淘金者】阵营获胜！' });
                     gameEnded = true;
+                    finishRound(roomId, 'Gold Miner', '🎉 恭喜！挖到了宝藏！【淘金者】阵营获胜！', socket.id);
                 } else {
                     gCard.name = '🪨'; // 变成石头图标
                     io.to(roomId).emit('gameMsg', '哎呀，挖开是个石头！继续找！');
@@ -259,8 +321,8 @@ io.on('connection', (socket) => {
         // 检查是不是所有人都没牌了 (牌堆抽空 + 手牌打光 = 破坏者赢)
         const allHandsEmpty = players.every(p => p.hand.length === 0);
         if (allHandsEmpty && !gameEnded) {
-            io.to(roomId).emit('gameOver', { winners: 'Saboteur', msg: '😈 所有牌已耗尽，未能挖到宝藏！【破坏者】阵营获胜！' });
             gameEnded = true;
+            finishRound(roomId, 'Saboteur', '😈 所有牌已耗尽，未能挖到宝藏！【破坏者】阵营获胜！');
         }
 
         // 如果游戏还没结束，才切换回合
@@ -293,7 +355,7 @@ io.on('connection', (socket) => {
         // --- 新增：弃牌后也要检查是不是所有人手牌耗尽 ---
         const allHandsEmpty = players.every(p => p.hand.length === 0);
         if (allHandsEmpty) {
-            io.to(roomId).emit('gameOver', { winners: 'Saboteur', msg: '😈 所有牌已耗尽，未能挖到宝藏！【破坏者】阵营获胜！' });
+            finishRound(roomId, 'Saboteur', '😈 所有牌已耗尽，未能挖到宝藏！【破坏者】阵营获胜！');
             socket.emit('handUpdated', { yourHand: player.hand });
             return;
         }
