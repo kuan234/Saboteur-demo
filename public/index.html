@@ -12,7 +12,7 @@
         #tabletop { flex: 1; background-color: #3e2723; margin: 20px 0; border-radius: 10px; position: relative; overflow: auto; display: none; border: 5px solid #5d4037; box-shadow: inset 0 0 50px rgba(0,0,0,0.8); }
         .grid-container { position: relative; width: 1500px; height: 800px; cursor: crosshair; }
         
-        .card { width: 70px; height: 100px; background: #ecf0f1; color: #2c3e50; border-radius: 6px; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; border: 2px solid #bdc3c7; cursor: pointer; user-select: none; position: relative; }
+        .card { width: 70px; height: 100px; background: #ecf0f1; color: #2c3e50; border-radius: 6px; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; border: 2px solid #bdc3c7; cursor: pointer; user-select: none; position: relative; transition: transform 0.2s, box-shadow 0.2s; }
         
         /* 超大字体用来显示道路符号 */
         .card-symbol { font-size: 60px; line-height: 60px; font-weight: normal; color: #7f8c8d; }
@@ -168,7 +168,10 @@
                 const cardDiv = document.createElement('div');
                 cardDiv.className = 'card hand-card';
                 // 使用大号字体显示道路图案
-                const label = card.type==='path' ? '道路' : '行动';
+                const label = card.type==='path' ? '道路' : (card.subType === 'sabotage' ? '破坏' :
+                                   card.subType === 'repair' ? '修理' :
+                                   card.subType === 'map' ? '地图' :
+                                   card.subType === 'rockfall' ? '落石' : '行动');
                 cardDiv.innerHTML = `
                     <div class="card-symbol">${card.name}</div>
                     <div style="font-size:10px;">${label}</div>
@@ -177,6 +180,27 @@
                         : ''
                     }
                 `;
+
+                // 不同类型卡牌配不同配色
+                if (card.type === 'action') {
+                    if (card.subType === 'sabotage') {
+                        cardDiv.style.background = '#ffebee';
+                        cardDiv.style.borderColor = '#e53935';
+                        cardDiv.querySelector('.card-symbol').textContent = '💣';
+                    } else if (card.subType === 'repair') {
+                        cardDiv.style.background = '#e8f5e9';
+                        cardDiv.style.borderColor = '#43a047';
+                        cardDiv.querySelector('.card-symbol').textContent = '🛠️';
+                    } else if (card.subType === 'map') {
+                        cardDiv.style.background = '#e3f2fd';
+                        cardDiv.style.borderColor = '#1e88e5';
+                        cardDiv.querySelector('.card-symbol').textContent = '🗺️';
+                    } else if (card.subType === 'rockfall') {
+                        cardDiv.style.background = '#fff3e0';
+                        cardDiv.style.borderColor = '#fb8c00';
+                        cardDiv.querySelector('.card-symbol').textContent = '💥';
+                    }
+                }
                 
                 cardDiv.onclick = (e) => {
                     // 如果点的是旋转按钮，不切换选中
@@ -279,6 +303,10 @@
 
         socket.on('errorMsg', msg => alert(msg));
         socket.on('gameMsg', msg => alert(msg)); // 接收普通消息 (比如挖到了石头)
+        socket.on('mapResult', data => {
+            const text = data.isTreasure ? '这是金矿终点！' : '这是石头终点。';
+            alert(`你偷看了终点 (${data.coord})：\n${text}`);
+        });
         
         function updateScoresView(payload) {
             const scoreDiv = document.getElementById('score-board');

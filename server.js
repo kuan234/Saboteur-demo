@@ -48,19 +48,35 @@ function getRoleDeck(playerCount) {
 }
 
 // 核心：定义卡牌的四个接口 [上, 右, 下, 左]。1代表通，0代表死路。
+// 这里用 11 类基础形状，下面再配置发牌时的数量分布，总数 = 40。
 const pathTemplates = [
-    { type: 'path', name: '╋', dirs: [1, 1, 1, 1] },
-    { type: 'path', name: '┃', dirs: [1, 0, 1, 0] },
-    { type: 'path', name: '━', dirs: [0, 1, 0, 1] },
-    { type: 'path', name: '┳', dirs: [0, 1, 1, 1] },
-    { type: 'path', name: '┻', dirs: [1, 1, 0, 1] },
-    { type: 'path', name: '┣', dirs: [1, 1, 1, 0] },
-    { type: 'path', name: '┫', dirs: [1, 0, 1, 1] },
-    { type: 'path', name: '┏', dirs: [0, 1, 1, 0] },
-    { type: 'path', name: '┓', dirs: [0, 0, 1, 1] },
-    { type: 'path', name: '┗', dirs: [1, 1, 0, 0] },
-    { type: 'path', name: '┛', dirs: [1, 0, 0, 1] }
+    { type: 'path', name: '╋', dirs: [1, 1, 1, 1] }, // 十字
+    { type: 'path', name: '┃', dirs: [1, 0, 1, 0] }, // 竖直
+    { type: 'path', name: '━', dirs: [0, 1, 0, 1] }, // 水平
+    { type: 'path', name: '┳', dirs: [0, 1, 1, 1] }, // T 型缺上
+    { type: 'path', name: '┻', dirs: [1, 1, 0, 1] }, // T 型缺下
+    { type: 'path', name: '┣', dirs: [1, 1, 1, 0] }, // T 型缺左
+    { type: 'path', name: '┫', dirs: [1, 0, 1, 1] }, // T 型缺右
+    { type: 'path', name: '┏', dirs: [0, 1, 1, 0] }, // 拐角
+    { type: 'path', name: '┓', dirs: [0, 0, 1, 1] }, // 拐角
+    { type: 'path', name: '┗', dirs: [1, 1, 0, 0] }, // 拐角
+    { type: 'path', name: '┛', dirs: [1, 0, 0, 1] }  // 拐角
 ];
+// 更精细的道路牌数量分布（总和 40），近似贴近实体卡的组合：
+// 索引与上面的 pathTemplates 一一对应。
+const pathDeckCounts = [
+    3, // ╋  三通/十字类
+    5, // ┃  直线
+    5, // ━  直线
+    4, // ┳  T
+    4, // ┻  T
+    4, // ┣  T
+    4, // ┫  T
+    3, // ┏  拐角
+    3, // ┓  拐角
+    3, // ┗  拐角
+    2  // ┛  拐角
+]; // 3+5+5+4+4+4+4+3+3+3+2 = 40
 
 function createRoom(roomId, hostSocketId) {
     rooms[roomId] = {
@@ -178,11 +194,14 @@ function startGame(roomId) {
     room.board['8,-2'] = goals[0]; room.board['8,0'] = goals[1]; room.board['8,2'] = goals[2];
 
     room.deck = [];
-    // 普通道路卡：目前仍使用抽象形状模板，数量保持 40 张
-    for (let i = 0; i < 40; i++) {
-        let tmpl = pathTemplates[Math.floor(Math.random() * pathTemplates.length)];
-        room.deck.push({ ...tmpl, id: `path_${i}` });
-    }
+    // 普通道路卡：按预设数量分布精确生成 40 张
+    let pathId = 0;
+    pathTemplates.forEach((tmpl, idx) => {
+        const count = pathDeckCounts[idx] || 0;
+        for (let i = 0; i < count; i++) {
+            room.deck.push({ ...tmpl, id: `path_${pathId++}` });
+        }
+    });
     // 行动卡：按官方 27 张规格生成
     let actionId = 0;
     const pushAction = (card) => room.deck.push({ ...card, id: `action_${actionId++}` });
