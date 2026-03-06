@@ -161,14 +161,47 @@ function startGame(roomId) {
     room.board['8,-2'] = goals[0]; room.board['8,0'] = goals[1]; room.board['8,2'] = goals[2];
 
     room.deck = [];
-    // 随机生成 40 张具体的带形状的路线卡
+    // 普通道路卡：目前仍使用抽象形状模板，数量保持 40 张
     for (let i = 0; i < 40; i++) {
         let tmpl = pathTemplates[Math.floor(Math.random() * pathTemplates.length)];
         room.deck.push({ ...tmpl, id: `path_${i}` });
     }
-    // 生成 27 张行动卡 (用锤子表情代替)
-    for (let i = 0; i < 27; i++) {
-        room.deck.push({ type: 'action', name: '行动', id: `action_${i}` });
+    // 行动卡：按官方 27 张规格生成
+    let actionId = 0;
+    const pushAction = (card) => room.deck.push({ ...card, id: `action_${actionId++}` });
+
+    // A. 破坏牌 Sabotage（9）- 矿车/油灯/镐子 各 3
+    ['cart', 'lantern', 'pickaxe'].forEach(tool => {
+        for (let i = 0; i < 3; i++) {
+            pushAction({ type: 'action', subType: 'sabotage', tool, name: `破坏${tool}` });
+        }
+    });
+
+    // B1. 单工具修复（3）- 各 1
+    ['cart', 'lantern', 'pickaxe'].forEach(tool => {
+        pushAction({ type: 'action', subType: 'repair', tools: [tool], name: `修理${tool}` });
+    });
+
+    // B2. 双工具修复（6）- 每个组合 2
+    const pairs = [
+        ['cart', 'lantern'],
+        ['cart', 'pickaxe'],
+        ['lantern', 'pickaxe']
+    ];
+    pairs.forEach(tools => {
+        for (let i = 0; i < 2; i++) {
+            pushAction({ type: 'action', subType: 'repair', tools, name: `修理${tools.join('/')}` });
+        }
+    });
+
+    // C. 地图牌 Map（6）
+    for (let i = 0; i < 6; i++) {
+        pushAction({ type: 'action', subType: 'map', name: '地图' });
+    }
+
+    // D. 落石牌 Rockfall（3）
+    for (let i = 0; i < 3; i++) {
+        pushAction({ type: 'action', subType: 'rockfall', name: '落石' });
     }
     room.deck = shuffle(room.deck);
 

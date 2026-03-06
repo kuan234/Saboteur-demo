@@ -109,14 +109,38 @@
                 const cardDiv = document.createElement('div');
                 cardDiv.className = 'card hand-card';
                 // 使用大号字体显示道路图案
-                cardDiv.innerHTML = `<div class="card-symbol">${card.name}</div><div style="font-size:10px;">${card.type==='path'?'道路':'行动'}</div>`;
+                const label = card.type==='path' ? '道路' : '行动';
+                cardDiv.innerHTML = `
+                    <div class="card-symbol">${card.name}</div>
+                    <div style="font-size:10px;">${label}</div>
+                    ${card.type==='path'
+                        ? '<div style="position:absolute;bottom:4px;right:4px;font-size:12px;cursor:pointer;color:#2980b9;" class="rotate-btn">↻</div>'
+                        : ''
+                    }
+                `;
                 
-                cardDiv.onclick = () => {
+                cardDiv.onclick = (e) => {
+                    // 如果点的是旋转按钮，不切换选中
+                    if (e.target && e.target.classList.contains('rotate-btn')) {
+                        return;
+                    }
                     document.querySelectorAll('.hand-card').forEach(c => c.classList.remove('selected'));
                     cardDiv.classList.add('selected');
                     selectedCard = card; 
                     document.getElementById('discard-btn').style.display = 'inline-block';
                 };
+
+                if (card.type === 'path') {
+                    const rotateBtn = cardDiv.querySelector('.rotate-btn');
+                    rotateBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        // 只允许 180° 旋转：上下、左右互换
+                        if (Array.isArray(card.dirs) && card.dirs.length === 4) {
+                            const [top, right, bottom, left] = card.dirs;
+                            card.dirs = [bottom, left, top, right];
+                        }
+                    };
+                }
                 handDiv.appendChild(cardDiv);
             });
         }
