@@ -11,6 +11,8 @@
         
         #tabletop { flex: 1; background-color: #3e2723; margin: 20px 0; border-radius: 10px; position: relative; overflow: auto; display: none; border: 5px solid #5d4037; box-shadow: inset 0 0 50px rgba(0,0,0,0.8); }
         .grid-container { position: relative; width: 1500px; height: 800px; cursor: crosshair; }
+        .grid-cell { position: absolute; width: 80px; height: 110px; border: 1px dashed rgba(255,255,255,0.15); box-sizing: border-box; pointer-events: none; }
+        .grid-cell.placeable { border-color: rgba(46,204,113,0.45); background: rgba(46,204,113,0.08); }
         
         .card { width: 70px; height: 100px; background: #ecf0f1; color: #2c3e50; border-radius: 6px; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; border: 2px solid #bdc3c7; cursor: pointer; user-select: none; position: relative; transition: transform 0.2s, box-shadow 0.2s; }
         
@@ -170,6 +172,11 @@
                     div.classList.add('selected');
                 };
                 listDiv.appendChild(div);
+
+                // 如果语音已开启，对新玩家自动建立 WebRTC 连接
+                if (localStream && p.id !== socket.id && !peers[p.id]) {
+                    callPeer(p.id);
+                }
             });
         });
 
@@ -215,12 +222,13 @@
                     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     btn.innerText = '🔇 关闭语音';
                     btn.style.background = '#7f8c8d';
-                    // 为当前已知玩家创建连接并发起 offer
+                    // 对当前房间内的所有其他玩家发起 WebRTC 连接
                     document.querySelectorAll('.player-item').forEach(el => {
-                        const label = el.innerText;
-                        // 自己不需要连
+                        const remoteId = el.dataset.id;
+                        if (remoteId && remoteId !== socket.id) {
+                            callPeer(remoteId);
+                        }
                     });
-                    // 实际连接在收到 roomPlayers 后按需建立
                 } catch (e) {
                     alert('获取麦克风失败：' + e.message);
                 }
@@ -230,6 +238,8 @@
                 localStream = null;
                 Object.values(peers).forEach(pc => pc.close());
                 for (const id in peers) delete peers[id];
+                // 移除所有远端音频元素
+                document.querySelectorAll('audio[id^="audio-"]').forEach(a => a.remove());
                 btn.innerText = '🎙 开启语音';
                 btn.style.background = '#16a085';
             }
@@ -376,8 +386,37 @@
         function renderBoard(boardData) {
             const boardGrid = document.getElementById('board-grid');
             boardGrid.innerHTML = '';
-            const baseX = 100, baseY = 350, cardWidth = 80, cardHeight = 110; 
+            const baseX = 100, baseY = 350, cardWidth = 80, cardHeight = 110;
 
+            // 收集已占用位置和可放置的空位
+            const occupied = new Set(Object.keys(boardData));
+            const placeable = new Set();
+            for (const coord of occupied) {
+                const [x, y] = coord.split(',').map(Number);
+                [[0,-1],[1,0],[0,1],[-1,0]].forEach(([dx,dy]) => {
+                    const nc = `${x+dx},${y+dy}`;
+                    if (!occupied.has(nc)) placeable.add(nc);
+                });
+            }
+
+            // 绘制网格背景（覆盖常用范围 + 所有可放置位置）
+            const allCoords = new Set([...occupied, ...placeable]);
+            for (let gx = -2; gx <= 10; gx++) {
+                for (let gy = -4; gy <= 4; gy++) {
+                    allCoords.add(`${gx},${gy}`);
+                }
+            }
+            for (const coord of allCoords) {
+                if (occupied.has(coord)) continue;
+                const [x, y] = coord.split(',').map(Number);
+                const cell = document.createElement('div');
+                cell.className = 'grid-cell' + (placeable.has(coord) ? ' placeable' : '');
+                cell.style.left = `${baseX + x * cardWidth}px`;
+                cell.style.top = `${baseY + y * cardHeight}px`;
+                boardGrid.appendChild(cell);
+            }
+
+            // 绘制已放置的卡牌
             for (const [coord, card] of Object.entries(boardData)) {
                 const [x, y] = coord.split(',').map(Number);
                 const cardEl = document.createElement('div');
@@ -389,7 +428,6 @@
                 if (card.type === 'start') cardEl.className = 'card board-card start-card';
                 else if (card.type === 'goal') { 
                     cardEl.className = 'card board-card goal-card'; 
-                    // 如果 faceUp 是 true，就显示 💎 或 🪨，否则显示 ?
                     cardEl.innerHTML = `<div class="card-symbol">${card.faceUp ? card.name : '?'}</div>`; 
                 }
                 else cardEl.className = 'card board-card'; 
@@ -418,10 +456,7 @@
             }
 
             socket.emit('playCard', payload);
-            
-            selectedCard = null;
-            document.getElementById('discard-btn').style.display = 'none';
-            document.querySelectorAll('.hand-card').forEach(c => c.classList.remove('selected'));
+            // 不立即清除选中状态，等待服务端确认后再清除
         };
 
         function discardSelectedCard() {
@@ -481,7 +516,13 @@
             document.getElementById('discard-btn').style.display = 'none';
         });
         socket.on('boardUpdated', newBoard => renderBoard(newBoard));
-        socket.on('handUpdated', data => renderHand(data.yourHand));
+        socket.on('handUpdated', data => {
+            // 服务端确认后才清除选中状态
+            selectedCard = null;
+            document.getElementById('discard-btn').style.display = 'none';
+            document.querySelectorAll('.hand-card').forEach(c => c.classList.remove('selected'));
+            renderHand(data.yourHand);
+        });
         socket.on('turnUpdated', data => {
             const statusDiv = document.getElementById('turn-status');
             if (data.currentTurnId === socket.id) {

@@ -40,11 +40,11 @@ function getRoleDeck(playerCount) {
     else if (playerCount === 9) { saboteurs = 3; miners = 7; }
     else if (playerCount === 10) { saboteurs = 4; miners = 7; }
     else { return []; }
-    
+
     const roleDeck = [];
     for (let i = 0; i < saboteurs; i++) roleDeck.push('Saboteur');
     for (let i = 0; i < miners; i++) roleDeck.push('Gold Miner');
-    return shuffle(roleDeck); 
+    return shuffle(roleDeck);
 }
 
 // 核心：定义卡牌的四个接口 [上, 右, 下, 左]。1代表通，0代表死路。
@@ -128,7 +128,7 @@ function finishRound(roomId, winners, msg, connectorPlayerId) {
 
     if (winners === 'Gold Miner') {
         // 简化版：每个好矮人随机获得 1-3 金块
-    miners.forEach(p => {
+        miners.forEach(p => {
             const gain = 1 + Math.floor(Math.random() * 3);
             room.scores[p.playerKey] += gain;
             scoreDelta[p.playerKey] = gain;
@@ -192,8 +192,8 @@ function startGame(roomId) {
 
     room.board = {};
     // 起点卡四个方向都通
-    room.board['0,0'] = { type: 'start', name: '梯', dirs: [1,1,1,1], faceUp: true };
-    
+    room.board['0,0'] = { type: 'start', name: '梯', dirs: [1, 1, 1, 1], faceUp: true };
+
     let goals = [
         { type: 'goal', faceUp: false, isTreasure: true, name: '终点' },
         { type: 'goal', faceUp: false, isTreasure: false, name: '终点' },
@@ -396,11 +396,11 @@ io.on('connection', (socket) => {
                     const tool = card.tool;
                     if (!tool) {
                         socket.emit('errorMsg', '这张破坏牌数据有误。');
-                    } else {
-                        target.tools[tool] = false;
-                        io.to(roomId).emit('gameMsg', `玩家 ${target.name || target.id} 的 ${tool} 被破坏了。`);
-                        broadcastRoomPlayers(roomId);
+                        return;
                     }
+                    target.tools[tool] = false;
+                    io.to(roomId).emit('gameMsg', `玩家 ${target.name || target.id} 的 ${tool} 被破坏了。`);
+                    broadcastRoomPlayers(roomId);
                 } else if (subType === 'repair') {
                     const tools = card.tools || [];
                     let repaired = false;
@@ -414,15 +414,16 @@ io.on('connection', (socket) => {
                     }
                     if (!repaired) {
                         socket.emit('errorMsg', '目标玩家对应的工具没有损坏，修理失败。');
-                    } else {
-                        broadcastRoomPlayers(roomId);
+                        return;
                     }
+                    broadcastRoomPlayers(roomId);
                 }
             } else if (subType === 'map') {
                 const coord = `${targetX},${targetY}`;
                 const gCard = room.board[coord];
                 if (!gCard || gCard.type !== 'goal') {
                     socket.emit('errorMsg', '地图只能用于查看终点卡！');
+                    return;
                 } else {
                     socket.emit('mapResult', { coord, isTreasure: !!gCard.isTreasure });
                 }
@@ -431,6 +432,7 @@ io.on('connection', (socket) => {
                 const bCard = room.board[coord];
                 if (!bCard || bCard.type === 'start' || bCard.type === 'goal') {
                     socket.emit('errorMsg', '落石只能移除普通道路牌，不能移除起点或终点！');
+                    return;
                 } else {
                     delete room.board[coord];
                     io.to(roomId).emit('boardUpdated', room.board);
