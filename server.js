@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const crypto = require('crypto');
 const { Server } = require('socket.io');
 
 const app = express();
@@ -9,6 +10,10 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const CLIENT_DIST_DIR = path.join(__dirname, 'frontend', 'dist');
+const usersByUsername = {};
+const usersByToken = {};
+
+app.use(express.json());
 
 app.use(express.static(CLIENT_DIST_DIR));
 app.use('/legacy', express.static(PUBLIC_DIR));
@@ -21,7 +26,51 @@ app.get('/healthz', (_req, res) => {
     res.status(200).send('ok');
 });
 
-app.get(/^(?!\/socket\.io\/|\/healthz$).*/, (_req, res) => {
+app.post('/api/register', (req, res) => {
+    const username = String(req.body?.username || '').trim();
+    const password = String(req.body?.password || '').trim();
+    const nickname = String(req.body?.nickname || '').trim();
+
+    if (!username || !password || !nickname) {
+        return res.status(400).json({ error: '请填写完整信息' });
+    }
+    if (usersByUsername[username]) {
+        return res.status(400).json({ error: '账号已存在' });
+    }
+
+    usersByUsername[username] = {
+        id: crypto.randomUUID(),
+        username,
+        password,
+        nickname
+    };
+
+    return res.json({ success: true });
+});
+
+app.post('/api/login', (req, res) => {
+    const username = String(req.body?.username || '').trim();
+    const password = String(req.body?.password || '').trim();
+    const user = usersByUsername[username];
+
+    if (!user || user.password !== password) {
+        return res.status(401).json({ error: '账号或密码错误' });
+    }
+
+    const token = crypto.randomBytes(24).toString('hex');
+    usersByToken[token] = {
+        id: user.id,
+        username: user.username,
+        nickname: user.nickname
+    };
+
+    return res.json({
+        token,
+        user: usersByToken[token]
+    });
+});
+
+app.get(/^(?!\/socket\.io\/|\/healthz$|\/api\/).*/, (_req, res) => {
     res.sendFile(path.join(CLIENT_DIST_DIR, 'index.html'));
 });
 
@@ -284,6 +333,16 @@ function startGame(roomId) {
 }
 
 io.on('connection', (socket) => {
+    socket.on('authenticate', (token) => {
+        const user = usersByToken[String(token || '')];
+        if (!user) {
+            socket.emit('authenticated', { success: false, error: '登录已失效，请重新登录' });
+            return;
+        }
+        socket.data.user = user;
+        socket.emit('authenticated', { success: true, user });
+    });
+
     // 断线重连：客户端会在连接后自动发送本地保存的 playerKey/roomId
     socket.on('reconnectPlayer', (data) => {
         const { roomId, playerKey } = data || {};
