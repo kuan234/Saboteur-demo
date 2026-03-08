@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=MedievalSharp&family=Cinzel:wght@400;700;900&family=Noto+Sans+SC:wght@400;700&display=swap');
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #0a0705;
+  font-family: 'Noto Sans SC', 'Cinzel', serif;
+}
+
+/* ===== Custom Scrollbar ===== */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.3);
+  border-radius: 4px;
+}
+
+/* ===== Animations ===== */
+@keyframes breathe-gold {
+
+  0%,
+  100% {
+    box-shadow: 0 0 8px 2px rgba(212, 175, 55, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 18px 6px rgba(212, 175, 55, 0.7);
+  }
+}
+
+@keyframes float-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes card-stamp {
+  0% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+
+  60% {
+    transform: scale(0.95);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes glow-pulse {
+
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-breathe-gold {
+  animation: breathe-gold 2s ease-in-out infinite;
+}
+
+.animate-float-up {
+  animation: float-up 0.3s ease-out forwards;
+}
+
+.animate-card-stamp {
+  animation: card-stamp 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 1.8s ease-in-out infinite;
+}
