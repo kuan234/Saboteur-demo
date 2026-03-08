@@ -1,12 +1,23 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
 const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-app.use(express.static('public'));
+const PUBLIC_DIR = path.join(__dirname, 'public');
+
+app.use(express.static(PUBLIC_DIR));
+
+app.get('/', (_req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'index.legacy.html'));
+});
+
+app.get('/healthz', (_req, res) => {
+    res.status(200).send('ok');
+});
 
 // 多房间结构：每个房间都有自己的一套状态
 // rooms[roomId] = {

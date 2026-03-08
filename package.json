@@ -4,7 +4,9 @@
   "description": "��#\u0000 \u0000S\u0000a\u0000b\u0000o\u0000t\u0000e\u0000u\u0000r\u0000-\u0000d\u0000e\u0000m\u0000o\u0000\r\u0000 \u0000",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "echo \"No tests configured\""
   },
   "repository": {
     "type": "git",
@@ -21,5 +23,8 @@
     "express": "^5.2.1",
     "socket.io": "^4.8.3"
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
 }
