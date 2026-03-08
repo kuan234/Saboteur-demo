@@ -3,6 +3,6 @@ services:
     name: saboteur-demo
     env: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /healthz

@@ -8,15 +8,21 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const CLIENT_DIST_DIR = path.join(__dirname, 'frontend', 'dist');
 
-app.use(express.static(PUBLIC_DIR));
+app.use(express.static(CLIENT_DIST_DIR));
+app.use('/legacy', express.static(PUBLIC_DIR));
 
 app.get('/', (_req, res) => {
-    res.sendFile(path.join(PUBLIC_DIR, 'index.legacy.html'));
+    res.sendFile(path.join(CLIENT_DIST_DIR, 'index.html'));
 });
 
 app.get('/healthz', (_req, res) => {
     res.status(200).send('ok');
+});
+
+app.get(/^(?!\/socket\.io\/|\/healthz$).*/, (_req, res) => {
+    res.sendFile(path.join(CLIENT_DIST_DIR, 'index.html'));
 });
 
 // 多房间结构：每个房间都有自己的一套状态

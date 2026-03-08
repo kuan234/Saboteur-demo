@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "echo \"No tests configured\""
+    "test": "echo \"No tests configured\"",
+    "build:client": "npm --prefix frontend ci && npm --prefix frontend run build",
+    "build": "npm run build:client"
   },
   "repository": {
     "type": "git",
