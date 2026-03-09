@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const calculateCardTransform = (index, totalCards) => {
     if (totalCards <= 1) return { rotation: 0, translateY: 0 };
@@ -64,7 +64,7 @@ const HandCard = ({ card, index, totalCards, hoveredIndex, setHoveredIndex, onDr
             onDoubleClick={() => { if (isPath) toggleRotation(card.id); }}
         >
             {/* Card Body */}
-            <div className={`w-28 h-44 md:w-36 md:h-52 rounded-xl overflow-hidden cursor-grab active:cursor-grabbing
+            <div className={`w-24 h-36 sm:w-28 sm:h-44 md:w-36 md:h-52 rounded-xl overflow-hidden cursor-grab active:cursor-grabbing
         border-2
         shadow-[0_6px_20px_rgba(0,0,0,0.7)]
         ${isHovered ? 'shadow-[0_12px_35px_rgba(212,175,55,0.5)] border-amber-400' : theme.border}
@@ -139,6 +139,13 @@ const HandCard = ({ card, index, totalCards, hoveredIndex, setHoveredIndex, onDr
 export default function HandCards({ cards, onDragStartCard, onDiscardCard }) {
     const [hoveredIndex, setHoveredIndex] = useState(null);
     const [rotations, setRotations] = useState({});
+    const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+
+    useEffect(() => {
+        const onResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
 
     const displayCards = cards && cards.length > 0 ? cards : [];
 
@@ -150,11 +157,11 @@ export default function HandCards({ cards, onDragStartCard, onDiscardCard }) {
     };
 
     return (
-        <div className="w-full relative flex justify-center items-end px-4"
+        <div className="w-full relative flex justify-center items-end px-2 md:px-4 overflow-x-auto"
             style={{ marginLeft: '-1rem', marginRight: '-1rem' }}>
-            <div className="flex justify-center items-end" style={{ gap: '-2rem' }}>
+            <div className="flex justify-start md:justify-center items-end min-w-max px-3 md:px-0" style={{ gap: isMobile ? '0.5rem' : '-2rem' }}>
                 {displayCards.map((card, index) => (
-                    <div key={card.id || index} style={{ marginLeft: index > 0 ? '-1.5rem' : '0' }}>
+                    <div key={card.id || index} style={{ marginLeft: isMobile ? '0' : (index > 0 ? '-1.5rem' : '0') }}>
                         <HandCard
                             card={card}
                             index={index}

@@ -165,7 +165,7 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
     return (
         <div className="relative w-full h-full flex items-center justify-center">
             {/* Dirt / Earth textured board background */}
-            <div className="relative w-[70%] max-w-[900px] aspect-[16/10] rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.9),inset_0_0_80px_rgba(0,0,0,0.6)]"
+            <div className="relative w-[98%] sm:w-[94%] md:w-[80%] lg:w-[70%] max-w-[900px] aspect-[16/10] rounded-xl md:rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.9),inset_0_0_80px_rgba(0,0,0,0.6)]"
                 style={{
                     background: 'radial-gradient(ellipse at center, #3d2b1a 0%, #1a120b 80%)',
                     border: '4px solid rgba(120,80,40,0.5)',
@@ -175,7 +175,7 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
                     style={{ background: 'repeating-conic-gradient(#2a1f14 0% 25%, #1e1610 0% 50%) 0 0 / 30px 30px' }} />
 
                 {/* The Grid */}
-                <div className="absolute inset-6 md:inset-10 flex items-center justify-center">
+                <div className="absolute inset-2 sm:inset-4 md:inset-8 lg:inset-10 flex items-center justify-center">
                     <div className="grid gap-1.5 w-full h-full"
                         style={{ gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${GRID_ROWS}, minmax(0, 1fr))` }}>
                         {cells}

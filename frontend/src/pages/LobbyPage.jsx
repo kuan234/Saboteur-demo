@@ -54,7 +54,7 @@ export default function LobbyPage() {
 
     // Not in a room: Lobby
     return (
-        <div className="w-full h-full flex flex-col relative" style={{ background: 'radial-gradient(ellipse at center, #1e1610 0%, #0a0705 100%)' }}>
+        <div className="w-full h-full flex flex-col relative overflow-y-auto" style={{ background: 'radial-gradient(ellipse at center, #1e1610 0%, #0a0705 100%)' }}>
 
             {/* Top Bar */}
             <div className="h-16 bg-stone-900/90 border-b border-stone-700/50 flex items-center justify-between px-6 shadow-md z-10">
@@ -70,7 +70,7 @@ export default function LobbyPage() {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 flex items-center justify-center p-8">
+            <div className="flex-1 flex items-start md:items-center justify-center p-4 md:p-8 pb-10 md:pb-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl w-full relative z-10">
 
                     {/* Create Room Card */}

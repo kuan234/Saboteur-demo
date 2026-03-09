@@ -39,17 +39,8 @@ export default function GamePage() {
         playCard(finalCard, null, null, targetPlayerId);
     };
 
-    const currentPlayer = players ? players.find(p => p.id === currentTurnId) : null;
-    const myPlayer = players ? players.find(p => p.id === socketId) : null;
-
-    // Safety fallback to prevent crashes if game Started but players didn't sync instantly
-    if (!players || players.length === 0) {
-        return (
-            <div className="w-full h-full flex items-center justify-center bg-stone-950 text-amber-500 font-bold text-xl animate-pulse">
-                正在同步矿坑数据...
-            </div>
-        );
-    }
+    const safePlayers = players || [];
+    const currentPlayer = safePlayers.find(p => p.id === currentTurnId);
 
     return (
         <div className="w-full h-full flex flex-col overflow-hidden relative"
@@ -80,7 +71,7 @@ export default function GamePage() {
 
 
             {/* === Voice Controls === */}
-            <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+            <div className="fixed right-3 bottom-40 md:top-4 md:bottom-auto md:right-4 z-[80] flex items-center gap-2">
                 <button
                     onClick={toggleSpeaker}
                     className={`px-3 py-1.5 rounded border text-sm font-bold shadow-md transition-all ${speakerEnabled
@@ -100,14 +91,14 @@ export default function GamePage() {
             </div>
 
             {voiceError && (
-                <div className="absolute top-16 right-4 z-50 px-3 py-2 rounded bg-red-900/70 border border-red-500 text-red-100 text-xs max-w-xs">
+                <div className="fixed right-3 bottom-28 md:top-16 md:bottom-auto md:right-4 z-[80] px-3 py-2 rounded bg-red-900/70 border border-red-500 text-red-100 text-xs max-w-xs">
                     {voiceError}
                 </div>
             )}
 
             {/* === Top Player Avatars === */}
             <PlayerBar
-                players={players}
+                players={safePlayers}
                 currentTurnId={currentTurnId}
                 myPlayerId={socketId}
                 draggingCard={draggingCard}
@@ -115,28 +106,32 @@ export default function GamePage() {
             />
 
             {/* === Center Board + Info Panel === */}
-            <div className="flex-1 relative flex items-center justify-center pt-20 pb-4">
+            <div className="flex-1 min-h-0 relative flex items-center justify-center pt-20 md:pt-20 pb-36 md:pb-56 px-2 md:px-4">
                 <GameBoard
                     draggingCard={draggingCard}
                     draggingRotation={draggingRotation}
                     onDropCard={handleDropCardOnBoard}
                     serverBoard={board}
                 />
-                <InfoPanel
-                    logs={logs}
-                    currentPlayerName={currentPlayer?.name}
-                    actionPrompt={`身份: ${myRole === 'Gold Miner' ? '淘金者' : '破坏者'}`}
-                    hints={draggingCard ? '拖放道路到网格，破坏/修复拖至玩家头像' : '选择一张手牌开始行动'}
-                />
+                <div className="hidden lg:block">
+                    <InfoPanel
+                        logs={logs}
+                        currentPlayerName={currentPlayer?.name}
+                        actionPrompt={`身份: ${myRole === 'Gold Miner' ? '淘金者' : '破坏者'}`}
+                        hints={draggingCard ? '拖放道路到网格，破坏/修复拖至玩家头像' : '选择一张手牌开始行动'}
+                    />
+                </div>
             </div>
 
             {/* === Bottom Chat & Actions === */}
-            <ChatBox messages={chatMessages || []} onSendMessage={sendChat} />
+            <div className="hidden md:block">
+                <ChatBox messages={chatMessages || []} onSendMessage={sendChat} />
+            </div>
 
             {/* === Bottom Hand Cards === */}
-            <div className="relative z-20 flex justify-center items-end pb-4 pt-2"
+            <div className="fixed bottom-0 left-0 right-0 z-[70] flex justify-center items-end pb-2 md:pb-4 pt-1 md:pt-2"
                 style={{
-                    minHeight: '220px',
+                    minHeight: '150px',
                     background: 'linear-gradient(to top, rgba(10,7,5,0.95) 0%, rgba(10,7,5,0.5) 60%, transparent 100%)',
                 }}>
                 <HandCards
