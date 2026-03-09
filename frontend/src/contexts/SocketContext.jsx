@@ -4,8 +4,18 @@ import { io } from 'socket.io-client';
 const SocketContext = createContext(null);
 export const useSocket = () => useContext(SocketContext);
 
+const RTC_CONFIG = {
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+};
+
 export function SocketProvider({ children }) {
     const socketRef = useRef(null);
+    const peerConnectionsRef = useRef(new Map());
+    const remoteAudiosRef = useRef(new Map());
+    const localStreamRef = useRef(null);
+    const speakerEnabledRef = useRef(false);
+    const micEnabledRef = useRef(false);
+    const roomIdRef = useRef(null);
 
     // Auth
     const [user, setUser] = useState(null);
@@ -28,6 +38,11 @@ export function SocketProvider({ children }) {
     const [round, setRound] = useState(1);
     const [scores, setScores] = useState({});
 
+    // Voice
+    const [speakerEnabled, setSpeakerEnabled] = useState(false);
+    const [micEnabled, setMicEnabled] = useState(false);
+    const [voiceError, setVoiceError] = useState('');
+
     // UI
     const [logs, setLogs] = useState([]);
     const [chatMessages, setChatMessages] = useState([]);
@@ -35,6 +50,94 @@ export function SocketProvider({ children }) {
     const [roundResult, setRoundResult] = useState(null);
     const [gameOverResult, setGameOverResult] = useState(null);
     const [mapResult, setMapResult] = useState(null);
+
+    const stopLocalMicTracks = useCallback(() => {
+        if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach(t => t.stop());
+            localStreamRef.current = null;
+        }
+    }, []);
+
+    const closeAllVoiceConnections = useCallback(() => {
+        peerConnectionsRef.current.forEach(pc => pc.close());
+        peerConnectionsRef.current.clear();
+
+        remoteAudiosRef.current.forEach(audio => {
+            try {
+                audio.pause();
+                audio.srcObject = null;
+            } catch {
+                // ignore
+            }
+        });
+        remoteAudiosRef.current.clear();
+    }, []);
+
+    const setAudioSinkState = useCallback((enabled) => {
+        remoteAudiosRef.current.forEach(audio => {
+            audio.muted = !enabled;
+            if (enabled) {
+                audio.play().catch(() => {
+                    // Some browsers require additional gesture.
+                });
+            }
+        });
+    }, []);
+
+    const ensurePeerConnection = useCallback((targetId) => {
+        const existing = peerConnectionsRef.current.get(targetId);
+        if (existing) return existing;
+
+        const socket = socketRef.current;
+        const pc = new RTCPeerConnection(RTC_CONFIG);
+
+        pc.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket?.emit('voice-ice-candidate', { targetId, candidate: event.candidate });
+            }
+        };
+
+        pc.ontrack = (event) => {
+            let audio = remoteAudiosRef.current.get(targetId);
+            if (!audio) {
+                audio = new Audio();
+                audio.autoplay = true;
+                remoteAudiosRef.current.set(targetId, audio);
+            }
+            const [stream] = event.streams;
+            audio.srcObject = stream;
+            audio.muted = !speakerEnabledRef.current;
+            if (speakerEnabledRef.current) {
+                audio.play().catch(() => {
+                    // Some browsers require additional gesture.
+                });
+            }
+        };
+
+        peerConnectionsRef.current.set(targetId, pc);
+        return pc;
+    }, []);
+
+    const attachLocalTracks = useCallback((pc) => {
+        const stream = localStreamRef.current;
+        if (!stream) return;
+        const currentTrackIds = pc.getSenders().map(s => s.track && s.track.id).filter(Boolean);
+        stream.getAudioTracks().forEach(track => {
+            if (!currentTrackIds.includes(track.id)) {
+                pc.addTrack(track, stream);
+            }
+        });
+    }, []);
+
+    const createOfferToPeer = useCallback(async (targetId) => {
+        const socket = socketRef.current;
+        if (!socket || !roomIdRef.current || targetId === socket.id) return;
+        const pc = ensurePeerConnection(targetId);
+        attachLocalTracks(pc);
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('voice-offer', { targetId, offer: pc.localDescription });
+    }, [attachLocalTracks, ensurePeerConnection]);
 
     // --- Init socket ---
     useEffect(() => {
@@ -118,7 +221,7 @@ export function SocketProvider({ children }) {
             setLogs(prev => [...prev, { time: now(), message: msg }]);
         });
 
-        socket.on('actionEffect', (data) => {
+        socket.on('actionEffect', () => {
             // Could trigger SFX here in the future
         });
 
@@ -141,6 +244,48 @@ export function SocketProvider({ children }) {
             setLogs(prev => [...prev, { time: now(), message: `🏁 ${data.msg}` }]);
         });
 
+        // Voice signaling
+        socket.on('voice-enabled', async ({ from }) => {
+            if (!from || from === socket.id) return;
+            if (!speakerEnabledRef.current && !micEnabledRef.current) return;
+            try {
+                await createOfferToPeer(from);
+            } catch (err) {
+                setVoiceError(`语音连接失败: ${err.message}`);
+            }
+        });
+
+        socket.on('voice-offer', async ({ from, offer }) => {
+            try {
+                const pc = ensurePeerConnection(from);
+                attachLocalTracks(pc);
+                await pc.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                socket.emit('voice-answer', { targetId: from, answer: pc.localDescription });
+            } catch (err) {
+                setVoiceError(`接收语音失败: ${err.message}`);
+            }
+        });
+
+        socket.on('voice-answer', async ({ from, answer }) => {
+            try {
+                const pc = ensurePeerConnection(from);
+                await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            } catch (err) {
+                setVoiceError(`语音应答失败: ${err.message}`);
+            }
+        });
+
+        socket.on('voice-ice-candidate', async ({ from, candidate }) => {
+            try {
+                const pc = ensurePeerConnection(from);
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch {
+                // ignore transient ICE errors
+            }
+        });
+
         // Chat
         socket.on('chatMessage', (data) => {
             setChatMessages(prev => [...prev, data]);
@@ -152,8 +297,45 @@ export function SocketProvider({ children }) {
             setTimeout(() => setErrorMsg(null), 4000);
         });
 
-        return () => { socket.disconnect(); };
-    }, []);
+        return () => {
+            stopLocalMicTracks();
+            closeAllVoiceConnections();
+            socket.disconnect();
+        };
+    }, [attachLocalTracks, closeAllVoiceConnections, createOfferToPeer, ensurePeerConnection, stopLocalMicTracks]);
+
+
+    useEffect(() => {
+        speakerEnabledRef.current = speakerEnabled;
+    }, [speakerEnabled]);
+
+    useEffect(() => {
+        micEnabledRef.current = micEnabled;
+    }, [micEnabled]);
+
+    useEffect(() => {
+        roomIdRef.current = roomId;
+    }, [roomId]);
+
+    useEffect(() => {
+        setAudioSinkState(speakerEnabled);
+    }, [speakerEnabled, setAudioSinkState]);
+
+    // Ensure mic-open players connect to newcomers
+    useEffect(() => {
+        if (!micEnabled || !roomId || !socketRef.current?.id) return;
+        const me = socketRef.current.id;
+        players
+            .map(p => p.id)
+            .filter(id => id && id !== me)
+            .forEach(id => {
+                if (!peerConnectionsRef.current.has(id)) {
+                    createOfferToPeer(id).catch(() => {
+                        // ignore one-off failures
+                    });
+                }
+            });
+    }, [players, micEnabled, roomId, createOfferToPeer]);
 
     // --- Action helpers ---
     const login = useCallback(async (username, password) => {
@@ -192,6 +374,11 @@ export function SocketProvider({ children }) {
         if (storedRoom) {
             socketRef.current?.emit('leaveRoom', { roomId: storedRoom });
         }
+        stopLocalMicTracks();
+        closeAllVoiceConnections();
+        setSpeakerEnabled(false);
+        setMicEnabled(false);
+        setVoiceError('');
         setRoomId(null);
         setPlayers([]);
         setPlayerCount(0);
@@ -203,7 +390,7 @@ export function SocketProvider({ children }) {
         setMapResult(null);
         localStorage.removeItem('saboteur_roomId');
         localStorage.removeItem('saboteur_playerKey');
-    }, [roomId]);
+    }, [roomId, stopLocalMicTracks, closeAllVoiceConnections]);
 
     const startGame = useCallback(() => {
         if (roomId) socketRef.current?.emit('requestStartGame', { roomId });
@@ -232,7 +419,43 @@ export function SocketProvider({ children }) {
         socketRef.current?.emit('chatMessage', { roomId, message });
     }, [roomId]);
 
+    const toggleSpeaker = useCallback(() => {
+        setSpeakerEnabled(prev => !prev);
+    }, []);
+
+    const toggleMic = useCallback(async () => {
+        if (!roomId) {
+            setVoiceError('请先进入房间后再开启麦克风');
+            return;
+        }
+
+        if (micEnabled) {
+            stopLocalMicTracks();
+            setMicEnabled(false);
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            localStreamRef.current = stream;
+            setMicEnabled(true);
+            setVoiceError('');
+
+            const myId = socketRef.current?.id;
+            const others = players.map(p => p.id).filter(id => id && id !== myId);
+            for (const targetId of others) {
+                await createOfferToPeer(targetId);
+            }
+
+            socketRef.current?.emit('voice-enabled', { roomId });
+        } catch (err) {
+            setVoiceError(`无法开启麦克风: ${err.message}`);
+        }
+    }, [roomId, micEnabled, players, stopLocalMicTracks, createOfferToPeer]);
+
     const logout = useCallback(() => {
+        stopLocalMicTracks();
+        closeAllVoiceConnections();
         localStorage.removeItem('saboteur_token');
         localStorage.removeItem('saboteur_user');
         localStorage.removeItem('saboteur_roomId');
@@ -242,7 +465,7 @@ export function SocketProvider({ children }) {
         setRoomId(null);
         setGameActive(false);
         window.location.reload();
-    }, []);
+    }, [stopLocalMicTracks, closeAllVoiceConnections]);
 
     const clearRoundResult = useCallback(() => setRoundResult(null), []);
     const clearGameOver = useCallback(() => {
@@ -265,6 +488,8 @@ export function SocketProvider({ children }) {
         // Game
         gameActive, myRole, hand, board, currentTurnId, round, scores,
         playCard, discardCard,
+        // Voice
+        speakerEnabled, micEnabled, voiceError, toggleSpeaker, toggleMic,
         // UI
         logs, chatMessages, sendChat, errorMsg, roundResult, gameOverResult, mapResult,
         clearRoundResult, clearGameOver,

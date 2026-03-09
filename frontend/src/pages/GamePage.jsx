@@ -11,7 +11,8 @@ export default function GamePage() {
         players, currentTurnId, socketId,
         board, hand, playCard, discardCard, leaveRoom,
         logs, chatMessages, sendChat, myRole, round, scores,
-        mapResult, roundResult, gameOverResult, clearRoundResult, clearGameOver
+        mapResult, roundResult, gameOverResult, clearRoundResult, clearGameOver,
+        speakerEnabled, micEnabled, voiceError, toggleSpeaker, toggleMic
     } = useSocket();
 
     const [draggingCard, setDraggingCard] = useState(null);
@@ -75,6 +76,34 @@ export default function GamePage() {
                     <span>🚪</span> 退出
                 </button>
             </div>
+
+
+
+            {/* === Voice Controls === */}
+            <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+                <button
+                    onClick={toggleSpeaker}
+                    className={`px-3 py-1.5 rounded border text-sm font-bold shadow-md transition-all ${speakerEnabled
+                        ? 'bg-emerald-800/70 border-emerald-400 text-emerald-100'
+                        : 'bg-stone-900/60 border-stone-600 text-stone-200 hover:bg-stone-800/80'}`}
+                >
+                    {speakerEnabled ? '🔊 听筒开' : '🔈 听筒关'}
+                </button>
+                <button
+                    onClick={toggleMic}
+                    className={`px-3 py-1.5 rounded border text-sm font-bold shadow-md transition-all ${micEnabled
+                        ? 'bg-amber-700/80 border-amber-400 text-amber-100'
+                        : 'bg-stone-900/60 border-stone-600 text-stone-200 hover:bg-stone-800/80'}`}
+                >
+                    {micEnabled ? '🎙️ 麦克风开' : '🎤 麦克风关'}
+                </button>
+            </div>
+
+            {voiceError && (
+                <div className="absolute top-16 right-4 z-50 px-3 py-2 rounded bg-red-900/70 border border-red-500 text-red-100 text-xs max-w-xs">
+                    {voiceError}
+                </div>
+            )}
 
             {/* === Top Player Avatars === */}
             <PlayerBar
