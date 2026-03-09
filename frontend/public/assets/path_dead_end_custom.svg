@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 768">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3c2413"/>
+      <stop offset="100%" stop-color="#1f120a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="768" fill="url(#bg)"/>
+  <text x="256" y="86" text-anchor="middle" fill="#ffd4b7" font-size="56" font-weight="700">堵路牌</text>
+  <g>
+    <rect x="70" y="210" width="372" height="74" rx="24" fill="#80512c" stroke="#b27a47" stroke-width="5"/>
+    <rect x="70" y="350" width="372" height="74" rx="24" fill="#80512c" stroke="#b27a47" stroke-width="5"/>
+    <rect x="70" y="490" width="372" height="74" rx="24" fill="#80512c" stroke="#b27a47" stroke-width="5"/>
+  </g>
+  <g>
+    <rect x="222" y="185" width="68" height="68" rx="12" fill="#9f1f1f" stroke="#f19898" stroke-width="4"/>
+    <line x1="236" y1="199" x2="276" y2="239" stroke="#ffe3e3" stroke-width="6"/>
+    <line x1="276" y1="199" x2="236" y2="239" stroke="#ffe3e3" stroke-width="6"/>
+    <rect x="124" y="325" width="68" height="68" rx="12" fill="#9f1f1f" stroke="#f19898" stroke-width="4"/>
+    <line x1="138" y1="339" x2="178" y2="379" stroke="#ffe3e3" stroke-width="6"/>
+    <line x1="178" y1="339" x2="138" y2="379" stroke="#ffe3e3" stroke-width="6"/>
+    <rect x="320" y="465" width="68" height="68" rx="12" fill="#9f1f1f" stroke="#f19898" stroke-width="4"/>
+    <line x1="334" y1="479" x2="374" y2="519" stroke="#ffe3e3" stroke-width="6"/>
+    <line x1="374" y1="479" x2="334" y2="519" stroke="#ffe3e3" stroke-width="6"/>
+  </g>
+  <circle cx="256" cy="386" r="82" fill="#ab2323" stroke="#ffaaaa" stroke-width="7"/>
+  <rect x="210" y="374" width="92" height="24" rx="10" fill="#ffe8e8"/>
+  <text x="256" y="728" text-anchor="middle" fill="#ffd4b7" font-size="34">Dead End</text>
+</svg>

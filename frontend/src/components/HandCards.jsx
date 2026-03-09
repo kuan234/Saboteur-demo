@@ -11,6 +11,7 @@ const calculateCardTransform = (index, totalCards) => {
 // Card type icons and colors
 const cardThemes = {
     'path': { bg: 'from-green-900 to-green-950', border: 'border-green-700', label: '路径牌', labelBg: 'bg-green-800/80', icon: '🛤️' },
+    'dead-end': { bg: 'from-rose-900 to-rose-950', border: 'border-rose-700', label: '堵路牌', labelBg: 'bg-rose-800/80', icon: '⛔' },
     'break': { bg: 'from-red-900 to-red-950', border: 'border-red-700', label: '行动牌', labelBg: 'bg-red-800/80', icon: '🔨' },
     'repair': { bg: 'from-blue-900 to-blue-950', border: 'border-blue-700', label: '行动牌', labelBg: 'bg-blue-800/80', icon: '🔧' },
     'map': { bg: 'from-purple-900 to-purple-950', border: 'border-purple-700', label: '行动牌', labelBg: 'bg-purple-800/80', icon: '🗺️' },
@@ -19,15 +20,17 @@ const cardThemes = {
 
 const getAssetImage = (card) => {
     // Return relative public path depending on card type
+    if (card.type === 'path' && card.subType === 'dead-end') return '/assets/path_dead_end_custom.svg';
     if (card.type === 'path') return '/assets/texture_dirt_1772909600159.png';
     if (card.subType === 'sabotage') return '/assets/action_sabotage_1772908474814.png';
-    if (card.subType === 'repair') return '/assets/action_repair_1772908491143.png';
-    if (card.subType === 'map') return '/assets/action_map_1772908508934.png';
+    if (card.subType === 'repair') return '/assets/action_repair_custom.svg';
+    if (card.subType === 'map') return '/assets/action_map_custom.svg';
     if (card.subType === 'rockfall') return '/assets/action_rockfall_1772908530135.png';
     return null; // fallback
 };
 
 const getTheme = (card) => {
+    if (card.type === 'path' && card.subType === 'dead-end') return cardThemes['dead-end'];
     if (card.type === 'path') return cardThemes.path;
     if (card.actionType) return cardThemes[card.actionType] || cardThemes.break;
     if (card.subType) return cardThemes[card.subType] || cardThemes.break;
