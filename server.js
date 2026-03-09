@@ -24,7 +24,11 @@ function sendClientApp(res) {
         res.status(503).send('Frontend build is missing. Run `npm run build` before starting the server.');
         return;
     }
-    res.sendFile(CLIENT_INDEX_FILE);
+    res.sendFile(CLIENT_INDEX_FILE, (err) => {
+        if (err && !res.headersSent) {
+            res.status(503).send('Frontend build is missing. Run `npm run build` before starting the server.');
+        }
+    });
 }
 
 app.use(express.json());
@@ -37,11 +41,7 @@ app.get('/', (_req, res) => {
 });
 
 app.get('/healthz', (_req, res) => {
-    if (!hasClientBuild()) {
-        res.status(500).send('frontend build missing');
-        return;
-    }
-    res.status(200).send('ok');
+    res.status(200).json({ ok: true, frontendReady: hasClientBuild() });
 });
 
 app.post('/api/register', (req, res) => {

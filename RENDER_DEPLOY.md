@@ -21,7 +21,7 @@
 ### 方式二：手动创建 Web Service
 1. **Build Command**: `npm ci && npm run build`
 2. **Start Command**: `npm start`
-3. **Health Check Path**: `/healthz`
+3. **Health Check Path**: `/healthz`（返回 JSON，例如 `{ "ok": true, "frontendReady": true }`）
 4. Node 版本：18+
 
 
