@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { Server } = require('socket.io');
@@ -10,8 +11,21 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const CLIENT_DIST_DIR = path.join(__dirname, 'frontend', 'dist');
+const CLIENT_INDEX_FILE = path.join(CLIENT_DIST_DIR, 'index.html');
 const usersByUsername = {};
 const usersByToken = {};
+
+function hasClientBuild() {
+    return fs.existsSync(CLIENT_INDEX_FILE);
+}
+
+function sendClientApp(res) {
+    if (!hasClientBuild()) {
+        res.status(503).send('Frontend build is missing. Run `npm run build` before starting the server.');
+        return;
+    }
+    res.sendFile(CLIENT_INDEX_FILE);
+}
 
 app.use(express.json());
 
@@ -19,10 +33,14 @@ app.use(express.static(CLIENT_DIST_DIR));
 app.use('/legacy', express.static(PUBLIC_DIR));
 
 app.get('/', (_req, res) => {
-    res.sendFile(path.join(CLIENT_DIST_DIR, 'index.html'));
+    sendClientApp(res);
 });
 
 app.get('/healthz', (_req, res) => {
+    if (!hasClientBuild()) {
+        res.status(500).send('frontend build missing');
+        return;
+    }
     res.status(200).send('ok');
 });
 
@@ -71,7 +89,7 @@ app.post('/api/login', (req, res) => {
 });
 
 app.get(/^(?!\/socket\.io\/|\/healthz$|\/api\/).*/, (_req, res) => {
-    res.sendFile(path.join(CLIENT_DIST_DIR, 'index.html'));
+    sendClientApp(res);
 });
 
 // 多房间结构：每个房间都有自己的一套状态

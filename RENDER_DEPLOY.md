@@ -23,3 +23,9 @@
 2. **Start Command**: `npm start`
 3. **Health Check Path**: `/healthz`
 4. Node 版本：18+
+
+
+## 故障排查
+
+- 如果日志出现 `ENOENT ... frontend/dist/index.html`，说明前端产物缺失。
+- 现在项目已在根 `package.json` 增加 `postinstall` 自动执行前端构建；若你手动改过 Render 命令，请确保至少执行过 `npm run build`。
