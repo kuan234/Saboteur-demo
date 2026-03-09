@@ -162,6 +162,20 @@ const pathDeckCounts = [
     2  // ┛  拐角
 ]; // 3+5+5+4+4+4+4+3+3+3+2 = 40
 
+// 堵路卡（死路卡）：方向表示“被堵住”的方向，每种 1 张
+// dirs 顺序同样为 [上, 右, 下, 左]，1=通，0=堵
+const deadEndTemplates = [
+    { type: 'path', subType: 'dead-end', name: '堵路-直', blocked: '左右', dirs: [1, 0, 1, 0] },
+    { type: 'path', subType: 'dead-end', name: '堵路-横', blocked: '上下', dirs: [0, 1, 0, 1] },
+    { type: 'path', subType: 'dead-end', name: '堵路-上下', blocked: '上下', dirs: [0, 1, 0, 1] },
+    { type: 'path', subType: 'dead-end', name: '堵路-下右', blocked: '下右', dirs: [1, 0, 0, 1] },
+    { type: 'path', subType: 'dead-end', name: '堵路-下左', blocked: '下左', dirs: [1, 1, 0, 0] },
+    { type: 'path', subType: 'dead-end', name: '堵路-左右', blocked: '左右', dirs: [1, 0, 1, 0] },
+    { type: 'path', subType: 'dead-end', name: '堵路-左右下', blocked: '左右下', dirs: [1, 0, 0, 0] },
+    { type: 'path', subType: 'dead-end', name: '堵路-上下左', blocked: '上下左', dirs: [0, 1, 0, 0] },
+    { type: 'path', subType: 'dead-end', name: '堵路-上下左右', blocked: '上下左右', dirs: [0, 0, 0, 0] }
+];
+
 function createRoom(roomId, hostSocketId) {
     rooms[roomId] = {
         hostId: hostSocketId,
@@ -297,6 +311,10 @@ function startGame(roomId) {
         for (let i = 0; i < count; i++) {
             room.deck.push({ ...tmpl, id: `path_${pathId++}` });
         }
+    });
+    // 堵路卡（死路卡）：按需求每种 1 张
+    deadEndTemplates.forEach((tmpl) => {
+        room.deck.push({ ...tmpl, id: `path_${pathId++}` });
     });
     // 行动卡：按官方 27 张规格生成
     let actionId = 0;
