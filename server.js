@@ -14,6 +14,8 @@ const CLIENT_DIST_DIR = path.join(__dirname, 'frontend', 'dist');
 const CLIENT_INDEX_FILE = path.join(CLIENT_DIST_DIR, 'index.html');
 const usersByUsername = {};
 const usersByToken = {};
+const matchQueue = [];
+const MATCH_SIZE = 3;
 
 function hasClientBuild() {
     return fs.existsSync(CLIENT_INDEX_FILE);
@@ -187,6 +189,64 @@ function createRoom(roomId, hostSocketId) {
         round: 1,
         scores: {}
     };
+}
+
+function emitMatchQueueStatus() {
+    const count = matchQueue.length;
+    matchQueue.forEach(socketId => {
+        io.to(socketId).emit('matchQueueStatus', { inQueue: true, count });
+    });
+}
+
+function tryCreateMatchRoom() {
+    if (matchQueue.length < MATCH_SIZE) return;
+
+    const matchedSocketIds = matchQueue.splice(0, MATCH_SIZE);
+    let roomId;
+    do {
+        roomId = Math.floor(1000 + Math.random() * 9000).toString();
+    } while (rooms[roomId]);
+
+    createRoom(roomId, matchedSocketIds[0]);
+    const room = rooms[roomId];
+
+    matchedSocketIds.forEach((socketId, index) => {
+        const playerKey = Math.random().toString(36).slice(2, 10);
+        const playerSocket = io.sockets.sockets.get(socketId);
+        const name = playerSocket?.data?.user?.nickname || `玩家${index + 1}`;
+
+        room.players.push({
+            id: socketId,
+            playerKey,
+            name,
+            role: null,
+            hand: [],
+            tools: { cart: true, lantern: true, pickaxe: true },
+            disconnected: false
+        });
+
+        if (playerSocket) {
+            playerSocket.join(roomId);
+            playerSocket.emit('matchFound', {
+                roomId,
+                isHost: socketId === room.hostId,
+                playerKey
+            });
+        }
+    });
+
+    io.to(roomId).emit('playerJoined', { playerCount: room.players.length });
+    broadcastRoomPlayers(roomId);
+    emitMatchQueueStatus();
+}
+
+function removeFromMatchQueue(socketId) {
+    const idx = matchQueue.indexOf(socketId);
+    if (idx !== -1) {
+        matchQueue.splice(idx, 1);
+        return true;
+    }
+    return false;
 }
 
 const toolNames = { cart: '矿车', lantern: '油灯', pickaxe: '镐子' };
@@ -369,6 +429,25 @@ function startGame(roomId) {
 }
 
 io.on('connection', (socket) => {
+    socket.on('joinMatchQueue', () => {
+        if (matchQueue.includes(socket.id)) {
+            socket.emit('matchQueueStatus', { inQueue: true, count: matchQueue.length });
+            return;
+        }
+        matchQueue.push(socket.id);
+        emitMatchQueueStatus();
+        tryCreateMatchRoom();
+    });
+
+    socket.on('leaveMatchQueue', () => {
+        if (removeFromMatchQueue(socket.id)) {
+            socket.emit('matchQueueStatus', { inQueue: false, count: matchQueue.length });
+            emitMatchQueueStatus();
+        } else {
+            socket.emit('matchQueueStatus', { inQueue: false, count: matchQueue.length });
+        }
+    });
+
     socket.on('authenticate', (token) => {
         const user = usersByToken[String(token || '')];
         if (!user) {
@@ -709,6 +788,9 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
+        if (removeFromMatchQueue(socket.id)) {
+            emitMatchQueueStatus();
+        }
         // 标记玩家断线，但保留其位置和分数，便于重连
         for (const [roomId, room] of Object.entries(rooms)) {
             const player = room.players.find(p => p.id === socket.id);
