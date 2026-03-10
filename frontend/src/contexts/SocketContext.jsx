@@ -338,6 +338,18 @@ export function SocketProvider({ children }) {
     }, [players, micEnabled, roomId, createOfferToPeer]);
 
     // --- Action helpers ---
+
+    const quickLogin = useCallback((nickname) => {
+        const cleanName = String(nickname || '').trim();
+        if (!cleanName) throw new Error('请输入用户名');
+        const guestUser = { id: `guest_${Date.now()}`, username: cleanName, nickname: cleanName };
+        setUser(guestUser);
+        setIsAuthenticated(true);
+        localStorage.setItem('saboteur_user', JSON.stringify(guestUser));
+        localStorage.removeItem('saboteur_token');
+        return guestUser;
+    }, []);
+
     const login = useCallback(async (username, password) => {
         const res = await fetch('/api/login', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -480,7 +492,7 @@ export function SocketProvider({ children }) {
     const value = {
         socket: socketRef.current, socketId,
         // Auth
-        user, isAuthenticated, login, register, logout,
+        user, isAuthenticated, quickLogin, login, register, logout,
         // Room
         roomId, isHost, playerKey, players, playerCount, createRoom, joinRoom, leaveRoom, startGame,
         // Match

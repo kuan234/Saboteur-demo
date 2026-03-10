@@ -30,7 +30,7 @@ export default function LobbyPage() {
                         {isHost ? (
                             <button
                                 onClick={startGame}
-                                disabled={players.length < 1} // usually 3, keep 1 for debug if needed, logic is on server
+                                disabled={players.length < 2}
                                 className="px-6 py-3 bg-gradient-to-b from-green-600 to-green-800 hover:from-green-500 hover:to-green-700 border border-green-500/50 rounded-lg text-white font-bold text-lg shadow-lg transition-transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 ▶ 开始游戏
@@ -117,7 +117,7 @@ export default function LobbyPage() {
                             <div className="w-full flex items-center justify-between bg-stone-900 border border-stone-700 p-2 rounded-xl">
                                 <div className="flex items-center gap-3 px-3">
                                     <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-                                    <span className="text-purple-400 font-bold text-sm">正在寻找矿工... ({matchQueue.count}/3)</span>
+                                    <span className="text-purple-400 font-bold text-sm">正在寻找矿工... ({matchQueue.count}/2)</span>
                                 </div>
                                 <button
                                     onClick={leaveMatchQueue}
@@ -135,7 +135,7 @@ export default function LobbyPage() {
                             </button>
                         )}
                         <div className="mt-6 text-stone-500 text-sm">
-                            匹配模式下，满 3 人即自动开始游戏
+                            匹配模式下，满 2 人即自动开始游戏
                         </div>
                     </div>
 

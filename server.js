@@ -15,7 +15,7 @@ const CLIENT_INDEX_FILE = path.join(CLIENT_DIST_DIR, 'index.html');
 const usersByUsername = {};
 const usersByToken = {};
 const matchQueue = [];
-const MATCH_SIZE = 3;
+const MATCH_SIZE = 2;
 
 function hasClientBuild() {
     return fs.existsSync(CLIENT_INDEX_FILE);
@@ -117,7 +117,8 @@ function shuffle(array) {
 
 function getRoleDeck(playerCount) {
     let saboteurs = 0, miners = 0;
-    if (playerCount === 3) { saboteurs = 1; miners = 3; }
+    if (playerCount === 2) { saboteurs = 1; miners = 2; }
+    else if (playerCount === 3) { saboteurs = 1; miners = 3; }
     else if (playerCount === 4) { saboteurs = 1; miners = 4; }
     else if (playerCount === 5) { saboteurs = 2; miners = 4; }
     else if (playerCount === 6) { saboteurs = 2; miners = 5; }
@@ -338,8 +339,8 @@ function startGame(roomId) {
 
     const players = room.players;
     const playerCount = players.length;
-    if (playerCount < 3 || playerCount > 10) {
-        io.to(roomId).emit('errorMsg', '需要 3-10 名玩家才能开始游戏！');
+    if (playerCount < 2 || playerCount > 10) {
+        io.to(roomId).emit('errorMsg', '需要 2-10 名玩家才能开始游戏！');
         return;
     }
 
@@ -415,7 +416,7 @@ function startGame(roomId) {
     }
     room.deck = shuffle(room.deck);
 
-    let cardsPerPlayer = (playerCount >= 3 && playerCount <= 5) ? 6 : (playerCount >= 6 && playerCount <= 7) ? 5 : 4;
+    let cardsPerPlayer = (playerCount >= 2 && playerCount <= 5) ? 6 : (playerCount >= 6 && playerCount <= 7) ? 5 : 4;
     for (let i = 0; i < cardsPerPlayer; i++) {
         players.forEach(player => { if (room.deck.length > 0) player.hand.push(room.deck.pop()); });
     }
