@@ -10,13 +10,15 @@ export default function GamePage() {
     const {
         players, currentTurnId, socketId,
         board, hand, playCard, discardCard, leaveRoom,
-        logs, chatMessages, sendChat, myRole, round, scores,
+        logs, chatMessages, sendChat, myRole,
         mapResult, roundResult, gameOverResult, clearRoundResult, clearGameOver,
         speakerEnabled, micEnabled, voiceError, toggleSpeaker, toggleMic
     } = useSocket();
 
     const [draggingCard, setDraggingCard] = useState(null);
     const [draggingRotation, setDraggingRotation] = useState(false);
+    const [mobilePanel, setMobilePanel] = useState('info');
+    const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
     const handleDragStartCard = (e, card, isRotated) => {
         setDraggingCard(card);
@@ -24,14 +26,12 @@ export default function GamePage() {
     };
 
     const handleDropCardOnBoard = (card, position, rotated) => {
-        // GameBoard grid: Start is 0,2. Server: Start is 0,0.
-        // Server Y = GameBoard Y - 2
         const targetX = position.x;
         const targetY = position.y - 2;
 
         const finalCard = { ...card, rotation: rotated ? 180 : 0 };
         playCard(finalCard, targetX, targetY);
-        return false; // Server controls board updates
+        return false;
     };
 
     const handleDropOnPlayer = (card, targetPlayerId) => {
@@ -46,7 +46,6 @@ export default function GamePage() {
         <div className="w-full h-full flex flex-col overflow-hidden relative"
             style={{ background: 'radial-gradient(ellipse at 50% 40%, #1e1610 0%, #0a0705 100%)' }}>
 
-            {/* === Ambient Decoration === */}
             <div className="absolute top-0 left-0 w-64 h-64 pointer-events-none opacity-30"
                 style={{ background: 'radial-gradient(circle, rgba(255,180,50,0.3) 0%, transparent 70%)' }} />
             <div className="absolute top-0 right-0 w-64 h-64 pointer-events-none opacity-20"
@@ -54,49 +53,44 @@ export default function GamePage() {
             <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-96 h-40 pointer-events-none opacity-20"
                 style={{ background: 'radial-gradient(ellipse, rgba(255,160,40,0.3) 0%, transparent 80%)' }} />
 
-            {/* === Exit Game Button === */}
-            <div className="absolute top-4 left-4 z-50">
+            <div className="absolute top-3 left-3 md:top-4 md:left-4 z-50">
                 <button
                     onClick={() => {
-                        if (window.confirm("确定要退出正在进行的对局吗？")) {
+                        if (window.confirm('确定要退出正在进行的对局吗？')) {
                             leaveRoom();
                         }
                     }}
-                    className="px-3 py-1.5 bg-red-900/40 hover:bg-red-800/60 border border-red-500/50 rounded text-red-200 text-sm font-bold shadow-md transition-all flex items-center gap-1"
+                    className="px-3 py-2 bg-red-900/50 hover:bg-red-800/70 border border-red-500/50 rounded-xl text-red-200 text-xs md:text-sm font-bold shadow-md transition-all flex items-center gap-1"
                 >
                     <span>🚪</span> 退出
                 </button>
             </div>
 
-
-
-            {/* === Voice Controls === */}
-            <div className="fixed right-3 bottom-40 md:top-4 md:bottom-auto md:right-4 z-[80] flex items-center gap-2">
+            <div className="fixed right-3 top-3 md:top-4 md:right-4 z-[80] flex flex-col md:flex-row items-end md:items-center gap-2">
                 <button
                     onClick={toggleSpeaker}
-                    className={`px-3 py-1.5 rounded border text-sm font-bold shadow-md transition-all ${speakerEnabled
+                    className={`px-3 py-2 rounded-xl border text-xs md:text-sm font-bold shadow-md transition-all ${speakerEnabled
                         ? 'bg-emerald-800/70 border-emerald-400 text-emerald-100'
-                        : 'bg-stone-900/60 border-stone-600 text-stone-200 hover:bg-stone-800/80'}`}
+                        : 'bg-stone-900/70 border-stone-600 text-stone-200 hover:bg-stone-800/80'}`}
                 >
                     {speakerEnabled ? '🔊 听筒开' : '🔈 听筒关'}
                 </button>
                 <button
                     onClick={toggleMic}
-                    className={`px-3 py-1.5 rounded border text-sm font-bold shadow-md transition-all ${micEnabled
+                    className={`px-3 py-2 rounded-xl border text-xs md:text-sm font-bold shadow-md transition-all ${micEnabled
                         ? 'bg-amber-700/80 border-amber-400 text-amber-100'
-                        : 'bg-stone-900/60 border-stone-600 text-stone-200 hover:bg-stone-800/80'}`}
+                        : 'bg-stone-900/70 border-stone-600 text-stone-200 hover:bg-stone-800/80'}`}
                 >
                     {micEnabled ? '🎙️ 麦克风开' : '🎤 麦克风关'}
                 </button>
             </div>
 
             {voiceError && (
-                <div className="fixed right-3 bottom-28 md:top-16 md:bottom-auto md:right-4 z-[80] px-3 py-2 rounded bg-red-900/70 border border-red-500 text-red-100 text-xs max-w-xs">
+                <div className="fixed right-3 top-28 md:top-16 md:right-4 z-[80] px-3 py-2 rounded bg-red-900/70 border border-red-500 text-red-100 text-xs max-w-xs">
                     {voiceError}
                 </div>
             )}
 
-            {/* === Top Player Avatars === */}
             <PlayerBar
                 players={safePlayers}
                 currentTurnId={currentTurnId}
@@ -105,14 +99,14 @@ export default function GamePage() {
                 onDropOnPlayer={handleDropOnPlayer}
             />
 
-            {/* === Center Board + Info Panel === */}
-            <div className="flex-1 min-h-0 relative flex items-center justify-center pt-20 md:pt-20 pb-36 md:pb-56 px-2 md:px-4">
+            <div className="flex-1 min-h-0 relative flex items-center justify-center pt-20 pb-36 md:pb-56 px-2 md:px-4">
                 <GameBoard
                     draggingCard={draggingCard}
                     draggingRotation={draggingRotation}
                     onDropCard={handleDropCardOnBoard}
                     serverBoard={board}
                 />
+
                 <div className="hidden lg:block">
                     <InfoPanel
                         logs={logs}
@@ -123,12 +117,94 @@ export default function GamePage() {
                 </div>
             </div>
 
-            {/* === Bottom Chat & Actions === */}
+            <div className="lg:hidden fixed left-3 bottom-[168px] z-[75] flex gap-2">
+                <button
+                    onClick={() => {
+                        setMobileDrawerOpen(true);
+                        setMobilePanel('info');
+                    }}
+                    className="px-3 py-2 rounded-xl bg-stone-900/85 border border-amber-500/40 text-amber-200 text-xs font-bold"
+                >
+                    📜 战况
+                </button>
+                <button
+                    onClick={() => {
+                        setMobileDrawerOpen(true);
+                        setMobilePanel('chat');
+                    }}
+                    className="px-3 py-2 rounded-xl bg-stone-900/85 border border-blue-500/40 text-blue-200 text-xs font-bold"
+                >
+                    💬 聊天
+                </button>
+            </div>
+
+            {mobileDrawerOpen && (
+                <div className="lg:hidden fixed inset-x-0 bottom-[148px] z-[76] px-3">
+                    <div className="rounded-2xl border border-stone-600 bg-stone-950/95 backdrop-blur-md shadow-2xl overflow-hidden">
+                        <div className="flex items-center justify-between px-3 py-2 border-b border-stone-700">
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setMobilePanel('info')}
+                                    className={`px-3 py-1.5 text-xs rounded-lg font-bold ${mobilePanel === 'info' ? 'bg-amber-700/80 text-white' : 'bg-stone-800 text-stone-300'}`}
+                                >
+                                    事件
+                                </button>
+                                <button
+                                    onClick={() => setMobilePanel('chat')}
+                                    className={`px-3 py-1.5 text-xs rounded-lg font-bold ${mobilePanel === 'chat' ? 'bg-blue-700/80 text-white' : 'bg-stone-800 text-stone-300'}`}
+                                >
+                                    聊天
+                                </button>
+                            </div>
+                            <button onClick={() => setMobileDrawerOpen(false)} className="text-stone-400">✕</button>
+                        </div>
+
+                        <div className="h-52">
+                            {mobilePanel === 'info' ? (
+                                <div className="h-full scale-[0.88] origin-top">
+                                    <InfoPanel
+                                        logs={logs}
+                                        currentPlayerName={currentPlayer?.name}
+                                        actionPrompt={`身份: ${myRole === 'Gold Miner' ? '淘金者' : '破坏者'}`}
+                                        hints={draggingCard ? '拖放道路到网格，破坏/修复拖至玩家头像' : '选择一张手牌开始行动'}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="h-full p-3 text-stone-300 text-sm overflow-y-auto custom-scrollbar space-y-2">
+                                    {(chatMessages || []).length > 0 ? chatMessages.map((m, i) => (
+                                        <div key={i} className="bg-stone-900 p-2 rounded-lg border border-stone-700">
+                                            <div className="flex justify-between text-xs mb-1">
+                                                <span className="text-amber-400 font-bold">{m.name}</span>
+                                                <span className="text-stone-500">{m.time}</span>
+                                            </div>
+                                            <div className="text-stone-200 break-words">{m.message}</div>
+                                        </div>
+                                    )) : <p className="text-stone-500 text-center py-10">暂无聊天记录</p>}
+                                    <form
+                                        onSubmit={(e) => {
+                                            e.preventDefault();
+                                            const input = e.target.mobileChat?.value?.trim();
+                                            if (input) {
+                                                sendChat(input);
+                                                e.target.reset();
+                                            }
+                                        }}
+                                        className="sticky bottom-0 bg-stone-950 pt-2 flex gap-2"
+                                    >
+                                        <input name="mobileChat" className="flex-1 bg-stone-800 border border-stone-700 rounded px-3 py-2 text-sm" placeholder="发消息..." />
+                                        <button type="submit" className="px-3 py-2 rounded bg-amber-700 text-white text-sm font-bold">发送</button>
+                                    </form>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="hidden md:block">
                 <ChatBox messages={chatMessages || []} onSendMessage={sendChat} />
             </div>
 
-            {/* === Bottom Hand Cards === */}
             <div className="fixed bottom-0 left-0 right-0 z-[70] flex justify-center items-end pb-2 md:pb-4 pt-1 md:pt-2"
                 style={{
                     minHeight: '150px',
@@ -141,13 +217,12 @@ export default function GamePage() {
                 />
             </div>
 
-            {/* === Map Result Modal === */}
             {mapResult && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-                    <div className="bg-stone-900 border-2 border-amber-500 rounded-xl p-8 text-center max-w-sm">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                    <div className="bg-stone-900 border-2 border-amber-500 rounded-xl p-6 text-center max-w-sm w-full">
                         <h2 className="text-2xl text-amber-500 font-bold mb-4 font-medieval">地图探秘</h2>
                         <div className="text-6xl mb-4">{mapResult.isTreasure ? '💎' : '🪨'}</div>
-                        <p className="text-stone-300">
+                        <p className="text-stone-300 text-sm md:text-base">
                             你查看了终点卡({mapResult.coord})：<br />
                             <span className="text-xl font-bold text-white">{mapResult.isTreasure ? '这是金块！' : '这是石头。'}</span>
                         </p>
@@ -155,17 +230,16 @@ export default function GamePage() {
                 </div>
             )}
 
-            {/* === Round Result Modal === */}
             {roundResult && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md">
-                    <div className="bg-stone-900 border-2 border-amber-500 rounded-xl p-8 text-center max-w-lg w-full">
-                        <h2 className="text-3xl text-amber-500 font-bold mb-6 font-medieval">回合结束</h2>
-                        <p className="text-stone-200 text-lg mb-6">{roundResult.msg}</p>
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+                    <div className="bg-stone-900 border-2 border-amber-500 rounded-xl p-5 md:p-8 text-center max-w-lg w-full">
+                        <h2 className="text-2xl md:text-3xl text-amber-500 font-bold mb-6 font-medieval">回合结束</h2>
+                        <p className="text-stone-200 text-base md:text-lg mb-6">{roundResult.msg}</p>
                         <ul className="text-left text-stone-300 mb-8 max-h-40 overflow-y-auto space-y-2">
                             {roundResult.players?.map((p, i) => {
                                 const gain = roundResult.delta && roundResult.delta[p.playerKey] ? `(+${roundResult.delta[p.playerKey]})` : '';
                                 return (
-                                    <li key={i} className="flex justify-between border-b border-stone-800 pb-1">
+                                    <li key={i} className="flex justify-between border-b border-stone-800 pb-1 text-sm md:text-base">
                                         <span>{p.name} ({p.role === 'Gold Miner' ? '矿工' : '破坏者'})</span>
                                         <span className="text-amber-400 font-bold">{roundResult.scores[p.playerKey] || 0} {gain}</span>
                                     </li>
@@ -182,18 +256,17 @@ export default function GamePage() {
                 </div>
             )}
 
-            {/* === Final Game Over Modal === */}
             {gameOverResult && (
-                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 backdrop-blur-md">
-                    <div className="bg-stone-900 border-2 border-red-500 rounded-xl p-8 text-center max-w-lg w-full">
-                        <h2 className="text-4xl text-red-500 font-bold mb-6 font-medieval">游戏结束</h2>
-                        <p className="text-stone-200 text-lg mb-6">{gameOverResult.msg}</p>
+                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+                    <div className="bg-stone-900 border-2 border-red-500 rounded-xl p-5 md:p-8 text-center max-w-lg w-full">
+                        <h2 className="text-3xl md:text-4xl text-red-500 font-bold mb-6 font-medieval">游戏结束</h2>
+                        <p className="text-stone-200 text-base md:text-lg mb-6">{gameOverResult.msg}</p>
                         <h3 className="text-amber-500 font-bold mb-2">最终得分：</h3>
                         <ul className="text-left text-stone-300 mb-8 max-h-40 overflow-y-auto space-y-2 bg-stone-950 p-4 rounded">
                             {(gameOverResult.players || []).sort((a, b) => (gameOverResult.scores[b.playerKey] || 0) - (gameOverResult.scores[a.playerKey] || 0)).map((p, i) => (
-                                <li key={i} className="flex justify-between border-b border-stone-800 pb-1">
+                                <li key={i} className="flex justify-between border-b border-stone-800 pb-1 text-sm md:text-base">
                                     <span>#{i + 1} {p.name} ({p.role === 'Gold Miner' ? '矿工' : '破坏者'})</span>
-                                    <span className="text-amber-400 font-bold text-xl">{gameOverResult.scores[p.playerKey] || 0}</span>
+                                    <span className="text-amber-400 font-bold text-lg md:text-xl">{gameOverResult.scores[p.playerKey] || 0}</span>
                                 </li>
                             ))}
                         </ul>
@@ -206,7 +279,6 @@ export default function GamePage() {
                     </div>
                 </div>
             )}
-
         </div>
     );
 }
