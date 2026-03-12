@@ -1,8 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=MedievalSharp&family=Cinzel:wght@400;700;900&family=Noto+Sans+SC:wght@400;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=MedievalSharp&family=Cinzel:wght@400;700;900&family=Noto+Sans+SC:wght@400;700&display=swap');
 
 html,
 body,
@@ -14,6 +15,11 @@ body,
   overflow: hidden;
   background-color: #0a0705;
   font-family: 'Noto Sans SC', 'Cinzel', serif;
+}
+
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+  overscroll-behavior: none;
 }
 
 /* ===== Custom Scrollbar ===== */
