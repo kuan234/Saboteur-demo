@@ -1,15 +1,27 @@
 import React, { useRef, useEffect } from 'react';
 
-export default function InfoPanel({ logs, actionPrompt, hints, currentPlayerName }) {
+export default function InfoPanel({ logs, actionPrompt, hints, currentPlayerName, variant = 'desktop' }) {
     const scrollRef = useRef(null);
+    const isMobile = variant === 'mobile';
+    const containerClass = isMobile
+        ? 'h-full flex flex-col'
+        : 'absolute right-3 top-[100px] bottom-[240px] w-52 xl:w-60 z-20 pointer-events-none hidden md:flex flex-col';
+    const panelClass = isMobile
+        ? 'h-full rounded-xl overflow-hidden pointer-events-auto flex flex-col'
+        : 'h-full rounded-xl overflow-hidden pointer-events-auto flex flex-col';
+    const sectionPadding = isMobile ? 'px-3 pt-3 pb-2' : 'px-4 pt-4 pb-2';
+    const compactSectionPadding = isMobile ? 'px-3 pt-2.5 pb-2' : 'px-4 pt-3 pb-2';
+    const footerPadding = isMobile ? 'px-3 pt-2.5 pb-3' : 'px-4 pt-3 pb-4';
+    const bodyTextClass = isMobile ? 'text-[11px]' : 'text-xs';
+    const titleTextClass = isMobile ? 'text-xs' : 'text-sm';
 
     useEffect(() => {
         if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }, [logs]);
 
     return (
-        <div className="absolute right-3 top-[100px] bottom-[240px] w-52 xl:w-60 z-20 pointer-events-none hidden md:flex flex-col">
-            <div className="h-full rounded-xl overflow-hidden pointer-events-auto flex flex-col"
+        <div className={containerClass}>
+            <div className={panelClass}
                 style={{
                     background: 'linear-gradient(160deg, rgba(60,40,25,0.95) 0%, rgba(30,20,12,0.98) 100%)',
                     border: '2px solid rgba(120,80,40,0.5)',
@@ -17,25 +29,25 @@ export default function InfoPanel({ logs, actionPrompt, hints, currentPlayerName
                 }}>
 
                 {/* PLAYER Section */}
-                <div className="px-4 pt-4 pb-2 border-b border-amber-900/30">
+                <div className={`${sectionPadding} border-b border-amber-900/30`}>
                     <h3 className="text-amber-600 font-bold text-[11px] tracking-[0.2em] uppercase mb-1"
-                        style={{ fontFamily: 'Cinzel, serif' }}>玩家</h3>
-                    <p className="text-amber-400 text-sm font-bold">{currentPlayerName || '—'}的回合</p>
+                        style={{ fontFamily: 'Cinzel, Noto Sans SC, Microsoft YaHei, sans-serif' }}>玩家</h3>
+                    <p className={`text-amber-400 font-bold ${titleTextClass}`}>{currentPlayerName || '—'}的回合</p>
                 </div>
 
                 {/* OBJECTIVE Section */}
-                <div className="px-4 pt-3 pb-2 border-b border-amber-900/30">
+                <div className={`${compactSectionPadding} border-b border-amber-900/30`}>
                     <h3 className="text-amber-600 font-bold text-[11px] tracking-[0.2em] uppercase mb-1"
-                        style={{ fontFamily: 'Cinzel, serif' }}>目标</h3>
-                    <p className="text-stone-300 text-xs">{actionPrompt || '连接通向金块的隧道！'}</p>
+                        style={{ fontFamily: 'Cinzel, Noto Sans SC, Microsoft YaHei, sans-serif' }}>目标</h3>
+                    <p className={`text-stone-300 ${bodyTextClass}`}>{actionPrompt || '连接通向金块的隧道！'}</p>
                 </div>
 
                 {/* RECENT EVENTS Section */}
-                <div className="flex-1 px-4 pt-3 pb-2 border-b border-amber-900/30 overflow-hidden flex flex-col">
+                <div className={`flex-1 ${compactSectionPadding} border-b border-amber-900/30 overflow-hidden flex flex-col`}>
                     <h3 className="text-amber-600 font-bold text-[11px] tracking-[0.2em] uppercase mb-2"
-                        style={{ fontFamily: 'Cinzel, serif' }}>最近事件</h3>
+                        style={{ fontFamily: 'Cinzel, Noto Sans SC, Microsoft YaHei, sans-serif' }}>最近事件</h3>
                     <div className="flex-1 overflow-y-auto custom-scrollbar" ref={scrollRef}>
-                        <ul className="space-y-1.5 text-xs text-stone-400">
+                        <ul className={`space-y-1.5 text-stone-400 ${bodyTextClass}`}>
                             {logs && logs.length > 0 ? logs.map((log, i) => (
                                 <li key={i} className="leading-snug animate-float-up">
                                     <span dangerouslySetInnerHTML={{ __html: log.message }} />
@@ -48,10 +60,10 @@ export default function InfoPanel({ logs, actionPrompt, hints, currentPlayerName
                 </div>
 
                 {/* HELP/HINT Section */}
-                <div className="px-4 pt-3 pb-4">
+                <div className={footerPadding}>
                     <h3 className="text-amber-600 font-bold text-[11px] tracking-[0.2em] uppercase mb-1"
-                        style={{ fontFamily: 'Cinzel, serif' }}>提示</h3>
-                    <p className="text-stone-500 text-[11px] italic leading-snug">{hints || '从起点连接路径到终点卡牌'}</p>
+                        style={{ fontFamily: 'Cinzel, Noto Sans SC, Microsoft YaHei, sans-serif' }}>提示</h3>
+                    <p className={`text-stone-500 italic leading-snug ${isMobile ? 'text-[10px]' : 'text-[11px]'}`}>{hints || '从起点连接路径到终点卡牌'}</p>
                 </div>
             </div>
         </div>

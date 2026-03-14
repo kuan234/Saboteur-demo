@@ -74,9 +74,58 @@ const BoardCard = ({ data }) => {
 export default function GameBoard({ draggingCard, draggingRotation, onDropCard, serverBoard }) {
     const [hoveredCell, setHoveredCell] = useState(null);
     const [mobileScale, setMobileScale] = useState(1);
-    const pinchRef = useRef({ distance: 0, startScale: 1 });
+    const [boardOffset, setBoardOffset] = useState({ x: 0, y: 0 });
+    const boardViewportRef = useRef(null);
+    const scaleRef = useRef(1);
+    const offsetRef = useRef({ x: 0, y: 0 });
+    const gestureRef = useRef({
+        mode: null,
+        distance: 0,
+        startScale: 1,
+        startOffset: { x: 0, y: 0 },
+        startPoint: null,
+    });
 
     const clampScale = (value) => Math.max(0.85, Math.min(1.8, value));
+    const resetGesture = () => {
+        gestureRef.current = {
+            mode: null,
+            distance: 0,
+            startScale: scaleRef.current,
+            startOffset: offsetRef.current,
+            startPoint: null,
+        };
+    };
+    const clampOffset = (nextOffset, scale = scaleRef.current) => {
+        const viewport = boardViewportRef.current;
+        if (!viewport) return nextOffset;
+
+        const width = viewport.clientWidth || viewport.getBoundingClientRect().width;
+        const height = viewport.clientHeight || viewport.getBoundingClientRect().height;
+        const maxX = Math.max(0, ((scale - 1) * width) / 2);
+        const maxY = Math.max(0, ((scale - 1) * height) / 2);
+
+        return {
+            x: Math.max(-maxX, Math.min(maxX, nextOffset.x)),
+            y: Math.max(-maxY, Math.min(maxY, nextOffset.y)),
+        };
+    };
+    const applyScale = (nextScale) => {
+        const clampedScale = clampScale(nextScale);
+        scaleRef.current = clampedScale;
+        setMobileScale(clampedScale);
+
+        const nextOffset = clampedScale <= 1
+            ? { x: 0, y: 0 }
+            : clampOffset(offsetRef.current, clampedScale);
+        offsetRef.current = nextOffset;
+        setBoardOffset(nextOffset);
+    };
+    const applyOffset = (nextOffset, scale = scaleRef.current) => {
+        const clampedOffset = scale <= 1 ? { x: 0, y: 0 } : clampOffset(nextOffset, scale);
+        offsetRef.current = clampedOffset;
+        setBoardOffset(clampedOffset);
+    };
 
     const getCellContent = (x, y) => {
         if (!serverBoard) return null;
@@ -127,19 +176,73 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
         const dy = touches[0].clientY - touches[1].clientY;
         return Math.sqrt(dx * dx + dy * dy);
     };
+    const getTouchPoint = (touch) => ({
+        x: touch?.clientX || 0,
+        y: touch?.clientY || 0,
+    });
 
     const handleTouchStart = (e) => {
-        if (e.touches.length !== 2) return;
-        const distance = getTouchDistance(e.touches);
-        pinchRef.current = { distance, startScale: mobileScale };
+        if (e.touches.length === 2) {
+            const distance = getTouchDistance(e.touches);
+            gestureRef.current = {
+                mode: 'pinch',
+                distance,
+                startScale: scaleRef.current,
+                startOffset: offsetRef.current,
+                startPoint: null,
+            };
+            return;
+        }
+
+        if (e.touches.length === 1 && scaleRef.current > 1.01) {
+            gestureRef.current = {
+                mode: 'pan',
+                distance: 0,
+                startScale: scaleRef.current,
+                startOffset: offsetRef.current,
+                startPoint: getTouchPoint(e.touches[0]),
+            };
+        }
     };
 
     const handleTouchMove = (e) => {
-        if (e.touches.length !== 2 || !pinchRef.current.distance) return;
-        e.preventDefault();
-        const distance = getTouchDistance(e.touches);
-        const ratio = distance / pinchRef.current.distance;
-        setMobileScale(clampScale(pinchRef.current.startScale * ratio));
+        if (e.touches.length === 2 && gestureRef.current.mode === 'pinch' && gestureRef.current.distance) {
+            e.preventDefault();
+            const distance = getTouchDistance(e.touches);
+            const ratio = distance / gestureRef.current.distance;
+            const nextScale = clampScale(gestureRef.current.startScale * ratio);
+
+            scaleRef.current = nextScale;
+            setMobileScale(nextScale);
+            applyOffset(gestureRef.current.startOffset, nextScale);
+            return;
+        }
+
+        if (e.touches.length === 1 && gestureRef.current.mode === 'pan' && scaleRef.current > 1.01) {
+            e.preventDefault();
+            const point = getTouchPoint(e.touches[0]);
+            const dx = point.x - gestureRef.current.startPoint.x;
+            const dy = point.y - gestureRef.current.startPoint.y;
+            applyOffset({
+                x: gestureRef.current.startOffset.x + dx,
+                y: gestureRef.current.startOffset.y + dy,
+            });
+        }
+    };
+
+    const handleTouchEnd = (e) => {
+        if (e.touches.length === 1 && scaleRef.current > 1.01) {
+            gestureRef.current = {
+                mode: 'pan',
+                distance: 0,
+                startScale: scaleRef.current,
+                startOffset: offsetRef.current,
+                startPoint: getTouchPoint(e.touches[0]),
+            };
+            return;
+        }
+
+        resetGesture();
     };
 
     const cells = [];
@@ -194,36 +297,52 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
         <div className="relative w-full h-full flex items-center justify-center" data-testid="game-board-shell">
             {/* Dirt / Earth textured board background */}
             <div
+                ref={boardViewportRef}
                 className="relative w-[98%] sm:w-[94%] md:w-[80%] lg:w-[70%] max-w-[900px] aspect-[6/5] rounded-xl md:rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.9),inset_0_0_80px_rgba(0,0,0,0.6)]"
                 data-testid="game-board"
                 style={{
                     background: 'radial-gradient(ellipse at center, #3d2b1a 0%, #1a120b 80%)',
                     border: '4px solid rgba(120,80,40,0.5)',
-                    transform: `scale(${mobileScale})`,
-                    transformOrigin: 'center center',
                     touchAction: 'none',
-                    transition: 'transform 120ms ease-out',
+                    cursor: mobileScale > 1.01 ? 'grab' : 'default',
                 }}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onTouchCancel={handleTouchEnd}
             >
-                {/* Inner dirt texture overlay */}
-                <div className="absolute inset-0 opacity-20 pointer-events-none"
-                    style={{ background: 'repeating-conic-gradient(#2a1f14 0% 25%, #1e1610 0% 50%) 0 0 / 30px 30px' }} />
+                <div
+                    className="absolute inset-0"
+                    style={{
+                        transform: `translate(${boardOffset.x}px, ${boardOffset.y}px) scale(${mobileScale})`,
+                        transformOrigin: 'center center',
+                        transition: gestureRef.current.mode ? 'none' : 'transform 120ms ease-out',
+                    }}
+                >
+                    {/* Inner dirt texture overlay */}
+                    <div className="absolute inset-0 opacity-20 pointer-events-none"
+                        style={{ background: 'repeating-conic-gradient(#2a1f14 0% 25%, #1e1610 0% 50%) 0 0 / 30px 30px' }} />
 
-                {/* The Grid */}
-                <div className="absolute inset-2 sm:inset-4 md:inset-6 lg:inset-8 flex items-center justify-center">
-                    <div className="grid gap-1.5 w-full h-full"
-                        style={{ gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${GRID_ROWS}, minmax(0, 1fr))` }}>
-                        {cells}
+                    {/* The Grid */}
+                    <div className="absolute inset-2 sm:inset-4 md:inset-6 lg:inset-8 flex items-center justify-center">
+                        <div className="grid gap-1.5 w-full h-full"
+                            style={{ gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${GRID_ROWS}, minmax(0, 1fr))` }}>
+                            {cells}
+                        </div>
                     </div>
                 </div>
 
                 <div className="absolute top-2 right-2 z-20 flex gap-1 md:hidden">
-                    <button onClick={() => setMobileScale((v) => clampScale(v - 0.1))} className="w-7 h-7 rounded bg-black/70 border border-stone-500 text-stone-200 text-sm">－</button>
-                    <button onClick={() => setMobileScale(1)} className="px-2 h-7 rounded bg-black/70 border border-stone-500 text-stone-200 text-[10px] font-bold">100%</button>
-                    <button onClick={() => setMobileScale((v) => clampScale(v + 0.1))} className="w-7 h-7 rounded bg-black/70 border border-stone-500 text-stone-200 text-sm">＋</button>
+                    <button onClick={() => applyScale(scaleRef.current - 0.1)} className="w-7 h-7 rounded bg-black/70 border border-stone-500 text-stone-200 text-sm">－</button>
+                    <button onClick={() => { applyScale(1); applyOffset({ x: 0, y: 0 }, 1); }} className="px-2 h-7 rounded bg-black/70 border border-stone-500 text-stone-200 text-[10px] font-bold">100%</button>
+                    <button onClick={() => applyScale(scaleRef.current + 0.1)} className="w-7 h-7 rounded bg-black/70 border border-stone-500 text-stone-200 text-sm">＋</button>
                 </div>
+
+                {mobileScale > 1.01 && !draggingCard && (
+                    <div className="pointer-events-none absolute top-2 left-2 z-20 rounded bg-black/70 px-2 py-1 text-[10px] font-bold text-stone-200 md:hidden">
+                        单指拖动查看地图
+                    </div>
+                )}
 
                 {/* Rotation hint */}
                 {draggingCard && (

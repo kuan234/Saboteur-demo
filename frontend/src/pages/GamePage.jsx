@@ -13,31 +13,31 @@ const rotateDirs180 = (dirs = []) => {
 
 const tutorialSteps = [
     {
-        title: 'æ­¥éª¤ 1 / 3ï¼šæ‹–ç‰Œæ”¾ç½®',
-        description: 'ä»Žä¸‹æ–¹æ‰‹ç‰Œæ‹–æ‹½åˆ°æ£‹ç›˜ç©ºä½ï¼Œå³å¯æ‰“å‡ºé“è·¯ç‰Œã€‚è¡ŒåŠ¨ç‰Œå¯æ‹–åˆ°çŽ©å®¶å¤´åƒã€‚',
+        title: '步骤 1 / 3：拖牌放置',
+        description: '从下方手牌拖到棋盘空位，即可打出道路牌。行动牌可以拖到玩家头像上。',
     },
     {
-        title: 'æ­¥éª¤ 2 / 3ï¼šæ—‹è½¬é“è·¯ç‰Œ',
-        description: 'æ‰‹æœºç«¯å…ˆç‚¹é€‰å¡ç‰Œï¼Œå†ç”¨â€œæ—‹è½¬â€æŒ‰é’®æ“ä½œï¼ˆä¹Ÿæ”¯æŒåŒå‡»æ—‹è½¬ï¼‰ã€‚',
+        title: '步骤 2 / 3：旋转道路牌',
+        description: '手机端先点选卡牌，再用“旋转”按钮操作，也支持双击旋转。',
     },
     {
-        title: 'æ­¥éª¤ 3 / 3ï¼šå¼ƒç‰Œè·³è¿‡',
-        description: 'ä¸æƒ³å‡ºç‰Œæ—¶å¯ç‚¹é€‰å¡ç‰ŒåŽä½¿ç”¨â€œå¼ƒç‰Œâ€ï¼Œä¹Ÿå¯ç›´æŽ¥ç‚¹å‡»åº•éƒ¨â€œå¼ƒç‰Œâ€æŒ‰é’®ã€‚',
+        title: '步骤 3 / 3：弃牌跳过',
+        description: '不想出牌时，可先选中卡牌再点击“弃牌”，也可以直接点底部“弃牌”按钮。',
     },
 ];
 
 const quickVoiceFallbackMessages = [
-    'æˆ‘è¿™å›žåˆå…ˆæŽ¢è·¯',
-    'æˆ‘è¢«å µäº†ï¼Œæ±‚ä¿®ç†',
-    'æ³¨æ„è¿™ä¸ªäººå¯èƒ½æ˜¯ç ´åè€…',
-    'æˆ‘æœ‰åœ°å›¾ç‰Œ',
+    '我这回合先探路',
+    '我被堵了，求修理',
+    '注意，这个人可能是破坏者',
+    '我有地图牌',
 ];
 
 const quickEmojiMessages = [
-    'æ€€ç–‘ä½ æ˜¯ç ´åè€… ðŸ‘€',
-    'å¹²å¾—æ¼‚äº® ðŸ‘',
-    'æ•‘æˆ‘ä¸€ä¸‹ ðŸ™',
-    'è¿™æ¡è·¯å¯ç–‘ ðŸ¤¨',
+    '怀疑你是破坏者 👀',
+    '干得漂亮 👍',
+    '救我一下 🙏',
+    '这条路可疑 🤨',
 ];
 
 export default function GamePage() {
@@ -61,6 +61,7 @@ export default function GamePage() {
     const [tutorialStep, setTutorialStep] = useState(0);
     const [eventBanner, setEventBanner] = useState('');
     const [actionPulse, setActionPulse] = useState(false);
+    const [showAllMobileLogs, setShowAllMobileLogs] = useState(false);
     const prevTurnRef = useRef(null);
 
     const safePlayers = players || [];
@@ -68,10 +69,22 @@ export default function GamePage() {
     const currentPlayer = safePlayers.find(p => p.id === currentTurnId);
     const selectedCard = safeHand.find(card => card.id === selectedCardId) || null;
     const isMyTurn = currentTurnId === socketId;
+    const roleLabel = myRole === 'Gold Miner' ? '淘金者' : '破坏者';
+    const actionPrompt = `身份: ${roleLabel}`;
+    const actionHint = draggingCard
+        ? '拖放道路到网格，破坏/修复牌拖到玩家头像'
+        : '选择一张手牌开始行动';
+    const speakerLabel = speakerEnabled ? '🔊 听筒开' : '🔈 听筒关';
+    const micLabel = micEnabled ? '🎙️ 麦克风开' : '🎤 麦克风关';
 
     const openMobilePanel = (panel) => {
         setMobilePanel(panel);
         setMobileDrawerOpen(true);
+    };
+    const reopenTutorial = () => {
+        setTutorialStep(0);
+        setTutorialOpen(true);
+        setMobileDrawerOpen(false);
     };
 
     const toggleCardRotation = (cardId) => {
@@ -233,7 +246,7 @@ export default function GamePage() {
 
             {showMyTurnHint && (
                 <div className="pointer-events-none fixed left-1/2 top-24 z-[90] -translate-x-1/2 rounded-full border border-amber-300/60 bg-amber-600/80 px-4 py-2 text-xs font-bold text-amber-50 shadow-lg md:text-sm" data-testid="turn-hint">
-                    è½®åˆ°ä½ è¡ŒåŠ¨äº†ï¼
+                    轮到你行动了！
                 </div>
             )}
 
@@ -246,13 +259,13 @@ export default function GamePage() {
             <div className="absolute top-3 left-3 md:top-4 md:left-4 z-50">
                 <button
                     onClick={() => {
-                        if (window.confirm('ç¡®å®šè¦é€€å‡ºæ­£åœ¨è¿›è¡Œçš„å¯¹å±€å—ï¼Ÿ')) {
+                        if (window.confirm('确定要退出正在进行的对局吗？')) {
                             leaveRoom();
                         }
                     }}
                     className="px-3 py-2 bg-red-900/50 hover:bg-red-800/70 border border-red-500/50 rounded-xl text-red-200 text-xs md:text-sm font-bold shadow-md transition-all flex items-center gap-1"
                 >
-                    <span>ðŸšª</span> é€€å‡º
+                    <span>🚪</span> 退出
                 </button>
             </div>
 
@@ -264,7 +277,7 @@ export default function GamePage() {
                         ? 'bg-emerald-800/70 border-emerald-400 text-emerald-100'
                         : 'bg-stone-900/70 border-stone-600 text-stone-200 hover:bg-stone-800/80'}`}
                 >
-                    {speakerEnabled ? 'ðŸ”Š å¬ç­’å¼€' : 'ðŸ”ˆ å¬ç­’å…³'}
+                    {speakerLabel}
                 </button>
                 <button
                     onClick={toggleMic}
@@ -273,7 +286,7 @@ export default function GamePage() {
                         ? 'bg-amber-700/80 border-amber-400 text-amber-100'
                         : 'bg-stone-900/70 border-stone-600 text-stone-200 hover:bg-stone-800/80'}`}
                 >
-                    {micEnabled ? 'ðŸŽ™ï¸ éº¦å…‹é£Žå¼€' : 'ðŸŽ¤ éº¦å…‹é£Žå…³'}
+                    {micLabel}
                 </button>
             </div>
 
@@ -283,20 +296,20 @@ export default function GamePage() {
                     data-testid="mobile-menu-button"
                     className="px-3 py-2 rounded-xl bg-stone-900/85 border border-stone-600 text-stone-200 text-xs font-bold"
                 >
-                    èœå•
+                    菜单
                 </button>
             </div>
 
             {voiceError && (
                 <div className="pointer-events-none fixed right-3 top-28 md:top-16 md:right-4 z-[80] max-w-xs rounded border border-red-500 bg-red-900/75 px-3 py-2 text-xs text-red-100" data-testid="voice-error-banner">
                     <div>{voiceError}</div>
-                    <div className="mt-1 text-[11px] text-amber-200">Voice unavailable. Use quick messages.</div>
+                    <div className="mt-1 text-[11px] text-amber-200">语音不可用，可改用快捷消息。</div>
                 </div>
             )}
 
             {false && voiceError && (
                 <div className="fixed left-3 right-3 top-36 z-[81] md:hidden rounded-xl border border-amber-500/40 bg-stone-950/95 p-3">
-                    <p className="text-[11px] text-amber-300 mb-2">è¯­éŸ³ä¸å¯ç”¨ï¼Œå·²åˆ‡æ¢å¿«æ·æ¶ˆæ¯</p>
+                    <p className="text-[11px] text-amber-300 mb-2">语音不可用，已切换到快捷消息。</p>
                     <div className="grid grid-cols-2 gap-2">
                         {quickVoiceFallbackMessages.map((msg) => (
                             <button
@@ -313,15 +326,15 @@ export default function GamePage() {
 
             <div className="lg:hidden fixed left-3 top-16 z-[79] rounded-xl border border-amber-500/40 bg-stone-950/90 px-3 py-2 text-[11px] text-stone-200 max-w-[80vw]" data-testid="mobile-hud">
                 <div className="flex items-center justify-between gap-3">
-                    <span>å½“å‰å›žåˆï¼š<span className="text-amber-300 font-bold">{currentPlayer?.name || 'ç­‰å¾…ä¸­'}</span></span>
-                    {isMyTurn ? <span className="text-emerald-300 font-bold">å¯è¡ŒåŠ¨</span> : <span className="text-stone-400">ç­‰å¾…</span>}
+                    <span>当前回合：<span className="text-amber-300 font-bold">{currentPlayer?.name || '等待中'}</span></span>
+                    {isMyTurn ? <span className="text-emerald-300 font-bold">可行动</span> : <span className="text-stone-400">等待</span>}
                 </div>
                 {isMyTurn && (
                     <div className="mt-2">
                         <div className="h-1.5 rounded-full bg-stone-800 overflow-hidden">
                             <div className="h-full bg-amber-500 transition-all" style={{ width: `${(turnSecondsLeft / 20) * 100}%` }} />
                         </div>
-                        <div className="mt-1 text-[10px] text-amber-200">å»ºè®® {turnSecondsLeft}s å†…å®Œæˆè¡ŒåŠ¨</div>
+                        <div className="mt-1 text-[10px] text-amber-200">建议在 {turnSecondsLeft}s 内完成行动</div>
                     </div>
                 )}
             </div>
@@ -346,8 +359,8 @@ export default function GamePage() {
                     <InfoPanel
                         logs={logs}
                         currentPlayerName={currentPlayer?.name}
-                        actionPrompt={`èº«ä»½: ${myRole === 'Gold Miner' ? 'æ·˜é‡‘è€…' : 'ç ´åè€…'}`}
-                        hints={draggingCard ? 'æ‹–æ”¾é“è·¯åˆ°ç½‘æ ¼ï¼Œç ´å/ä¿®å¤æ‹–è‡³çŽ©å®¶å¤´åƒ' : 'é€‰æ‹©ä¸€å¼ æ‰‹ç‰Œå¼€å§‹è¡ŒåŠ¨'}
+                        actionPrompt={actionPrompt}
+                        hints={actionHint}
                     />
                 </div>
             </div>
@@ -358,14 +371,14 @@ export default function GamePage() {
                     data-testid="mobile-info-button"
                     className="px-3 py-2 rounded-xl bg-stone-900/85 border border-amber-500/40 text-amber-200 text-xs font-bold"
                 >
-                    ðŸ“œ æˆ˜å†µ
+                    📜 战况
                 </button>
                 <button
                     onClick={() => openMobilePanel('chat')}
                     data-testid="mobile-chat-button"
                     className="px-3 py-2 rounded-xl bg-stone-900/85 border border-blue-500/40 text-blue-200 text-xs font-bold"
                 >
-                    ðŸ’¬ èŠå¤©
+                    💬 聊天
                 </button>
                 {voiceError && (
                     <button
@@ -373,7 +386,7 @@ export default function GamePage() {
                         data-testid="voice-fallback-entry"
                         className="px-3 py-2 rounded-xl bg-stone-900/85 border border-amber-500/50 text-amber-200 text-xs font-bold"
                     >
-                        Quick Msg
+                        快捷消息
                     </button>
                 )}
                 <button
@@ -381,7 +394,7 @@ export default function GamePage() {
                     data-testid="mobile-discard-button"
                     className="px-3 py-2 rounded-xl bg-stone-900/85 border border-red-500/40 text-red-200 text-xs font-bold"
                 >
-                    ðŸ—‘ï¸ å¼ƒç‰Œ
+                    🗑️ 弃牌
                 </button>
             </div>
 
@@ -395,35 +408,56 @@ export default function GamePage() {
                                     data-testid="drawer-tab-info"
                                     className={`px-3 py-1.5 text-xs rounded-lg font-bold ${mobilePanel === 'info' ? 'bg-amber-700/80 text-white' : 'bg-stone-800 text-stone-300'}`}
                                 >
-                                    äº‹ä»¶
+                                    事件
                                 </button>
                                 <button
                                     onClick={() => setMobilePanel('chat')}
                                     data-testid="drawer-tab-chat"
                                     className={`px-3 py-1.5 text-xs rounded-lg font-bold ${mobilePanel === 'chat' ? 'bg-blue-700/80 text-white' : 'bg-stone-800 text-stone-300'}`}
                                 >
-                                    èŠå¤©
+                                    聊天
                                 </button>
                                 <button
                                     onClick={() => setMobilePanel('voice')}
                                     data-testid="drawer-tab-voice"
                                     className={`px-3 py-1.5 text-xs rounded-lg font-bold ${mobilePanel === 'voice' ? 'bg-emerald-700/80 text-white' : 'bg-stone-800 text-stone-300'}`}
                                 >
-                                    è¯­éŸ³
+                                    语音
                                 </button>
                             </div>
-                            <button onClick={() => setMobileDrawerOpen(false)} data-testid="close-mobile-drawer" className="text-stone-400">âœ•</button>
+                            <button onClick={() => setMobileDrawerOpen(false)} data-testid="close-mobile-drawer" className="text-stone-400">✕</button>
                         </div>
 
                         <div className="h-52">
                             {mobilePanel === 'info' && (
-                                <div className="h-full scale-[0.88] origin-top">
+                                <div className="h-full p-3 flex flex-col gap-2" data-testid="mobile-info-panel">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <button
+                                            type="button"
+                                            data-testid="toggle-mobile-log-scope"
+                                            onClick={() => setShowAllMobileLogs(prev => !prev)}
+                                            className="rounded-lg border border-amber-500/30 bg-stone-900 px-2.5 py-1.5 text-[11px] font-bold text-amber-200"
+                                        >
+                                            {showAllMobileLogs ? '仅看最近 3 条' : `查看全部 (${logs?.length || 0})`}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            data-testid="reopen-tutorial"
+                                            onClick={reopenTutorial}
+                                            className="rounded-lg border border-blue-500/30 bg-stone-900 px-2.5 py-1.5 text-[11px] font-bold text-blue-200"
+                                        >
+                                            重看引导
+                                        </button>
+                                    </div>
+                                    <div className="min-h-0 flex-1">
                                     <InfoPanel
-                                        logs={logs}
+                                        logs={showAllMobileLogs ? logs : (logs || []).slice(-3)}
                                         currentPlayerName={currentPlayer?.name}
-                                        actionPrompt={`èº«ä»½: ${myRole === 'Gold Miner' ? 'æ·˜é‡‘è€…' : 'ç ´åè€…'}`}
-                                        hints={draggingCard ? 'æ‹–æ”¾é“è·¯åˆ°ç½‘æ ¼ï¼Œç ´å/ä¿®å¤æ‹–è‡³çŽ©å®¶å¤´åƒ' : 'é€‰æ‹©ä¸€å¼ æ‰‹ç‰Œå¼€å§‹è¡ŒåŠ¨'}
+                                        actionPrompt={actionPrompt}
+                                        hints={actionHint}
+                                        variant="mobile"
                                     />
+                                    </div>
                                 </div>
                             )}
 
@@ -431,7 +465,7 @@ export default function GamePage() {
                                 <div className="h-full p-3 text-stone-300 text-sm overflow-y-auto custom-scrollbar space-y-2" data-testid="mobile-chat-panel">
                                     {voiceError && (
                                         <div className="rounded-lg border border-amber-500/30 bg-amber-950/40 p-2" data-testid="voice-fallback-panel">
-                                            <div className="mb-2 text-[11px] font-bold text-amber-300">Voice unavailable. Quick messages enabled.</div>
+                                            <div className="mb-2 text-[11px] font-bold text-amber-300">语音不可用，已启用快捷消息。</div>
                                             <div className="grid grid-cols-2 gap-2">
                                                 {quickVoiceFallbackMessages.map((msg, index) => (
                                                     <button
@@ -466,7 +500,7 @@ export default function GamePage() {
                                             </div>
                                             <div className="text-stone-200 break-words">{m.message}</div>
                                         </div>
-                                    )) : <p className="text-stone-500 text-center py-4">æš‚æ— èŠå¤©è®°å½•</p>}
+                                    )) : <p className="text-stone-500 text-center py-4">暂无聊天记录</p>}
                                     <form
                                         onSubmit={(e) => {
                                             e.preventDefault();
@@ -479,8 +513,8 @@ export default function GamePage() {
                                         className="sticky bottom-0 bg-stone-950 pt-2 flex gap-2"
                                         data-testid="mobile-chat-form"
                                     >
-                                        <input name="mobileChat" data-testid="mobile-chat-input" className="flex-1 bg-stone-800 border border-stone-700 rounded px-3 py-2 text-sm" placeholder="å‘æ¶ˆæ¯..." />
-                                        <button type="submit" data-testid="mobile-chat-submit" className="px-3 py-2 rounded bg-amber-700 text-white text-sm font-bold">å‘é€</button>
+                                        <input name="mobileChat" data-testid="mobile-chat-input" className="flex-1 bg-stone-800 border border-stone-700 rounded px-3 py-2 text-sm" placeholder="发送消息..." />
+                                        <button type="submit" data-testid="mobile-chat-submit" className="px-3 py-2 rounded bg-amber-700 text-white text-sm font-bold">发送</button>
                                     </form>
                                 </div>
                             )}
@@ -493,18 +527,18 @@ export default function GamePage() {
                                             data-testid="mobile-toggle-speaker"
                                             className={`flex-1 px-3 py-2 rounded-lg border text-xs font-bold ${speakerEnabled ? 'bg-emerald-800/70 border-emerald-400 text-emerald-100' : 'bg-stone-900 border-stone-600 text-stone-200'}`}
                                         >
-                                            {speakerEnabled ? 'ðŸ”Š å¬ç­’å¼€' : 'ðŸ”ˆ å¬ç­’å…³'}
+                                            {speakerLabel}
                                         </button>
                                         <button
                                             onClick={toggleMic}
                                             data-testid="mobile-toggle-mic"
                                             className={`flex-1 px-3 py-2 rounded-lg border text-xs font-bold ${micEnabled ? 'bg-amber-700/80 border-amber-400 text-amber-100' : 'bg-stone-900 border-stone-600 text-stone-200'}`}
                                         >
-                                            {micEnabled ? 'ðŸŽ™ï¸ éº¦å…‹é£Žå¼€' : 'ðŸŽ¤ éº¦å…‹é£Žå…³'}
+                                            {micLabel}
                                         </button>
                                     </div>
                                     <div className="text-[11px] text-stone-400">
-                                        å¼±ç½‘æ—¶å»ºè®®ä½¿ç”¨èŠå¤©é¡µå¿«æ·è¯­å¥ï¼Œé¿å…è¯­éŸ³ä¸­æ–­å½±å“åä½œã€‚
+                                        弱网时建议使用聊天页快捷语句，避免语音中断影响协作。
                                     </div>
                                 </div>
                             )}
@@ -538,7 +572,7 @@ export default function GamePage() {
             {tutorialOpen && (
                 <div className="fixed inset-0 z-[95] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" data-testid="tutorial-modal">
                     <div className="w-full max-w-sm rounded-2xl border border-amber-500/50 bg-stone-900 p-4">
-                        <h3 className="text-amber-400 font-bold text-lg mb-1">æ–°æ‰‹å¼•å¯¼</h3>
+                        <h3 className="text-amber-400 font-bold text-lg mb-1">新手引导</h3>
                         <h4 className="text-stone-100 font-bold text-sm mb-2" data-testid="tutorial-step-title">{tutorialSteps[tutorialStep].title}</h4>
                         <p className="text-stone-300 text-sm leading-relaxed">{tutorialSteps[tutorialStep].description}</p>
                         <div className="mt-4 flex items-center justify-between">
@@ -550,7 +584,7 @@ export default function GamePage() {
                                 data-testid="tutorial-skip"
                                 className="px-3 py-2 text-xs rounded-lg border border-stone-600 text-stone-300"
                             >
-                                è·³è¿‡
+                                跳过
                             </button>
                             <button
                                 onClick={() => {
@@ -564,7 +598,7 @@ export default function GamePage() {
                                 data-testid="tutorial-next"
                                 className="px-4 py-2 text-xs rounded-lg bg-amber-700 text-white font-bold"
                             >
-                                {tutorialStep >= tutorialSteps.length - 1 ? 'å¼€å§‹æ¸¸æˆ' : 'ä¸‹ä¸€æ­¥'}
+                                {tutorialStep >= tutorialSteps.length - 1 ? '开始游戏' : '下一步'}
                             </button>
                         </div>
                     </div>
@@ -574,11 +608,11 @@ export default function GamePage() {
             {mapResult && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
                     <div className="bg-stone-900 border-2 border-amber-500 rounded-xl p-6 text-center max-w-sm w-full">
-                        <h2 className="text-2xl text-amber-500 font-bold mb-4 font-medieval">åœ°å›¾æŽ¢ç§˜</h2>
-                        <div className="text-6xl mb-4">{mapResult.isTreasure ? 'ðŸ’Ž' : 'ðŸª¨'}</div>
+                        <h2 className="text-2xl text-amber-500 font-bold mb-4 font-medieval">地图探秘</h2>
+                        <div className="text-6xl mb-4">{mapResult.isTreasure ? '💎' : '🪨'}</div>
                         <p className="text-stone-300 text-sm md:text-base">
-                            ä½ æŸ¥çœ‹äº†ç»ˆç‚¹å¡({mapResult.coord})ï¼š<br />
-                            <span className="text-xl font-bold text-white">{mapResult.isTreasure ? 'è¿™æ˜¯é‡‘å—ï¼' : 'è¿™æ˜¯çŸ³å¤´ã€‚'}</span>
+                            你查看了终点卡 ({mapResult.coord})：<br />
+                            <span className="text-xl font-bold text-white">{mapResult.isTreasure ? '这里是金块！' : '这里只是石头。'}</span>
                         </p>
                     </div>
                 </div>
@@ -587,14 +621,14 @@ export default function GamePage() {
             {roundResult && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
                     <div className="bg-stone-900 border-2 border-amber-500 rounded-xl p-5 md:p-8 text-center max-w-lg w-full">
-                        <h2 className="text-2xl md:text-3xl text-amber-500 font-bold mb-6 font-medieval">å›žåˆç»“æŸ</h2>
+                        <h2 className="text-2xl md:text-3xl text-amber-500 font-bold mb-6 font-medieval">回合结束</h2>
                         <p className="text-stone-200 text-base md:text-lg mb-6">{roundResult.msg}</p>
                         <ul className="text-left text-stone-300 mb-8 max-h-40 overflow-y-auto space-y-2">
                             {roundResult.players?.map((p, i) => {
                                 const gain = roundResult.delta && roundResult.delta[p.playerKey] ? `(+${roundResult.delta[p.playerKey]})` : '';
                                 return (
                                     <li key={i} className="flex justify-between border-b border-stone-800 pb-1 text-sm md:text-base">
-                                        <span>{p.name} ({p.role === 'Gold Miner' ? 'çŸ¿å·¥' : 'ç ´åè€…'})</span>
+                                        <span>{p.name} ({p.role === 'Gold Miner' ? '矿工' : '破坏者'})</span>
                                         <span className="text-amber-400 font-bold">{roundResult.scores[p.playerKey] || 0} {gain}</span>
                                     </li>
                                 );
@@ -604,7 +638,7 @@ export default function GamePage() {
                             onClick={clearRoundResult}
                             className="px-6 py-3 bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 rounded-lg text-white font-bold border border-amber-500/50"
                         >
-                            ç»§ç»­ä¸‹ä¸€è½®
+                            继续下一轮
                         </button>
                     </div>
                 </div>
@@ -613,13 +647,13 @@ export default function GamePage() {
             {gameOverResult && (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
                     <div className="bg-stone-900 border-2 border-red-500 rounded-xl p-5 md:p-8 text-center max-w-lg w-full">
-                        <h2 className="text-3xl md:text-4xl text-red-500 font-bold mb-6 font-medieval">æ¸¸æˆç»“æŸ</h2>
+                        <h2 className="text-3xl md:text-4xl text-red-500 font-bold mb-6 font-medieval">游戏结束</h2>
                         <p className="text-stone-200 text-base md:text-lg mb-6">{gameOverResult.msg}</p>
-                        <h3 className="text-amber-500 font-bold mb-2">æœ€ç»ˆå¾—åˆ†ï¼š</h3>
+                        <h3 className="text-amber-500 font-bold mb-2">最终得分：</h3>
                         <ul className="text-left text-stone-300 mb-8 max-h-40 overflow-y-auto space-y-2 bg-stone-950 p-4 rounded">
                             {(gameOverResult.players || []).sort((a, b) => (gameOverResult.scores[b.playerKey] || 0) - (gameOverResult.scores[a.playerKey] || 0)).map((p, i) => (
                                 <li key={i} className="flex justify-between border-b border-stone-800 pb-1 text-sm md:text-base">
-                                    <span>#{i + 1} {p.name} ({p.role === 'Gold Miner' ? 'çŸ¿å·¥' : 'ç ´åè€…'})</span>
+                                    <span>#{i + 1} {p.name} ({p.role === 'Gold Miner' ? '矿工' : '破坏者'})</span>
                                     <span className="text-amber-400 font-bold text-lg md:text-xl">{gameOverResult.scores[p.playerKey] || 0}</span>
                                 </li>
                             ))}
@@ -628,7 +662,7 @@ export default function GamePage() {
                             onClick={clearGameOver}
                             className="px-6 py-3 bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 rounded-lg text-white font-bold border border-red-500/50"
                         >
-                            è¿”å›žå¤§åŽ…
+                            返回大厅
                         </button>
                     </div>
                 </div>
