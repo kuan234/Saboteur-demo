@@ -96,6 +96,7 @@ export default function GamePage() {
         }, 1000);
         return () => clearInterval(timer);
     }, [isMyTurn, currentTurnId]);
+    const prevTurnRef = useRef(null);
 
     const handleDragStartCard = (e, card, isRotated) => {
         setDraggingCard(card);
@@ -166,6 +167,7 @@ export default function GamePage() {
                 style={{ background: 'radial-gradient(circle, rgba(255,180,50,0.2) 0%, transparent 70%)' }} />
             <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-96 h-40 pointer-events-none opacity-20"
                 style={{ background: 'radial-gradient(ellipse, rgba(255,160,40,0.3) 0%, transparent 80%)' }} />
+
 
             {showMyTurnHint && (
                 <div className="fixed left-1/2 top-24 z-[90] -translate-x-1/2 rounded-full border border-amber-300/60 bg-amber-600/80 px-4 py-2 text-xs font-bold text-amber-50 shadow-lg md:text-sm">
