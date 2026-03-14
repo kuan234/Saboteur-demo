@@ -58,6 +58,8 @@ export default function GamePage() {
     const [turnSecondsLeft, setTurnSecondsLeft] = useState(20);
     const [tutorialOpen, setTutorialOpen] = useState(false);
     const [tutorialStep, setTutorialStep] = useState(0);
+    const [eventBanner, setEventBanner] = useState('');
+    const [actionPulse, setActionPulse] = useState(false);
     const prevTurnRef = useRef(null);
 
     const safePlayers = players || [];
@@ -110,6 +112,7 @@ export default function GamePage() {
             dirs: rotated ? rotateDirs180(card.dirs) : card.dirs,
         };
         playCard(finalCard, targetX, targetY);
+        triggerActionFeedback();
         setSelectedCard(null);
         return false;
     };
@@ -117,17 +120,20 @@ export default function GamePage() {
     const handleDropOnPlayer = (card, targetPlayerId) => {
         const finalCard = { ...card, rotation: 0 };
         playCard(finalCard, null, null, targetPlayerId);
+        triggerActionFeedback();
         setSelectedCard(null);
     };
 
     const handleMobileDiscard = () => {
         if (selectedCard) {
             discardCard(selectedCard);
+            triggerActionFeedback();
             setSelectedCard(null);
             return;
         }
         if (hand && hand.length > 0) {
             discardCard(hand[0]);
+            triggerActionFeedback();
         }
     };
 
@@ -135,6 +141,21 @@ export default function GamePage() {
         sendChat(message);
         setMobileDrawerOpen(false);
     };
+
+    const triggerActionFeedback = () => {
+        setActionPulse(true);
+        if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(35);
+        setTimeout(() => setActionPulse(false), 280);
+    };
+
+    useEffect(() => {
+        if (!logs || logs.length === 0) return;
+        const latest = logs[logs.length - 1]?.message;
+        if (!latest) return;
+        setEventBanner(latest);
+        const t = setTimeout(() => setEventBanner(''), 2400);
+        return () => clearTimeout(t);
+    }, [logs]);
 
     return (
         <div className="w-full h-full flex flex-col overflow-hidden relative"
@@ -151,6 +172,12 @@ export default function GamePage() {
             {showMyTurnHint && (
                 <div className="fixed left-1/2 top-24 z-[90] -translate-x-1/2 rounded-full border border-amber-300/60 bg-amber-600/80 px-4 py-2 text-xs font-bold text-amber-50 shadow-lg md:text-sm">
                     轮到你行动了！
+                </div>
+            )}
+
+            {eventBanner && (
+                <div className="fixed left-1/2 top-36 z-[89] w-[88vw] max-w-md -translate-x-1/2 rounded-xl border border-blue-400/40 bg-stone-900/90 px-3 py-2 text-center text-xs text-blue-100 shadow-lg md:text-sm">
+                    {eventBanner}
                 </div>
             )}
 
@@ -397,16 +424,21 @@ export default function GamePage() {
                 <ChatBox messages={chatMessages || []} onSendMessage={sendChat} />
             </div>
 
-            <div className="fixed bottom-0 left-0 right-0 z-[70] flex justify-center items-end pb-2 md:pb-4 pt-1 md:pt-2"
+            <div className={`fixed bottom-0 left-0 right-0 z-[70] flex justify-center items-end pb-2 md:pb-4 pt-1 md:pt-2 ${actionPulse ? 'scale-[1.01]' : 'scale-100'}`}
                 style={{
                     minHeight: '132px',
                     paddingBottom: 'max(0.4rem, env(safe-area-inset-bottom))',
                     background: 'linear-gradient(to top, rgba(10,7,5,0.96) 0%, rgba(10,7,5,0.55) 60%, transparent 100%)',
+                    transition: 'transform 0.2s ease',
                 }}>
                 <HandCards
                     cards={hand || []}
                     onDragStartCard={handleDragStartCard}
-                    onDiscardCard={(c) => { discardCard(c); if (selectedCard?.id === c?.id) setSelectedCard(null); }}
+                    onDiscardCard={(c) => {
+                        discardCard(c);
+                        triggerActionFeedback();
+                        if (selectedCard?.id === c?.id) setSelectedCard(null);
+                    }}
                     selectedCardId={selectedCard?.id}
                     onSelectCard={(card) => setSelectedCard(card)}
                 />
