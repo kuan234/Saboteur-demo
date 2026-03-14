@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 
 const GRID_COLS = 9;
 const GRID_ROWS = 5;
@@ -73,6 +73,10 @@ const BoardCard = ({ data }) => {
 
 export default function GameBoard({ draggingCard, draggingRotation, onDropCard, serverBoard }) {
     const [hoveredCell, setHoveredCell] = useState(null);
+    const [mobileScale, setMobileScale] = useState(1);
+    const pinchRef = useRef({ distance: 0, startScale: 1 });
+
+    const clampScale = (value) => Math.max(0.85, Math.min(1.8, value));
 
     const getCellContent = (x, y) => {
         if (!serverBoard) return null;
@@ -116,6 +120,28 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
         }
     };
 
+
+    const getTouchDistance = (touches) => {
+        if (!touches || touches.length < 2) return 0;
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    const handleTouchStart = (e) => {
+        if (e.touches.length !== 2) return;
+        const distance = getTouchDistance(e.touches);
+        pinchRef.current = { distance, startScale: mobileScale };
+    };
+
+    const handleTouchMove = (e) => {
+        if (e.touches.length !== 2 || !pinchRef.current.distance) return;
+        e.preventDefault();
+        const distance = getTouchDistance(e.touches);
+        const ratio = distance / pinchRef.current.distance;
+        setMobileScale(clampScale(pinchRef.current.startScale * ratio));
+    };
+
     const cells = [];
     for (let r = 0; r < GRID_ROWS; r++) {
         for (let c = 0; c < GRID_COLS; c++) {
@@ -139,7 +165,7 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
             cells.push(
                 <div
                     key={`${c},${r}`}
-                    className={`aspect-[2/3] rounded-md transition-all duration-150 relative ${borderCls} ${glowCls}`}
+                    className={`w-full h-full rounded-md transition-all duration-150 relative ${borderCls} ${glowCls}`}
                     onDragOver={(e) => handleDragOver(e, c, r)}
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, c, r)}
@@ -165,21 +191,35 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
     return (
         <div className="relative w-full h-full flex items-center justify-center">
             {/* Dirt / Earth textured board background */}
-            <div className="relative w-[98%] sm:w-[94%] md:w-[80%] lg:w-[70%] max-w-[900px] aspect-[16/10] rounded-xl md:rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.9),inset_0_0_80px_rgba(0,0,0,0.6)]"
+            <div
+                className="relative w-[98%] sm:w-[94%] md:w-[80%] lg:w-[70%] max-w-[900px] aspect-[6/5] rounded-xl md:rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.9),inset_0_0_80px_rgba(0,0,0,0.6)]"
                 style={{
                     background: 'radial-gradient(ellipse at center, #3d2b1a 0%, #1a120b 80%)',
                     border: '4px solid rgba(120,80,40,0.5)',
-                }}>
+                    transform: `scale(${mobileScale})`,
+                    transformOrigin: 'center center',
+                    touchAction: 'none',
+                    transition: 'transform 120ms ease-out',
+                }}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+            >
                 {/* Inner dirt texture overlay */}
                 <div className="absolute inset-0 opacity-20 pointer-events-none"
                     style={{ background: 'repeating-conic-gradient(#2a1f14 0% 25%, #1e1610 0% 50%) 0 0 / 30px 30px' }} />
 
                 {/* The Grid */}
-                <div className="absolute inset-2 sm:inset-4 md:inset-8 lg:inset-10 flex items-center justify-center">
+                <div className="absolute inset-2 sm:inset-4 md:inset-6 lg:inset-8 flex items-center justify-center">
                     <div className="grid gap-1.5 w-full h-full"
                         style={{ gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${GRID_ROWS}, minmax(0, 1fr))` }}>
                         {cells}
                     </div>
+                </div>
+
+                <div className="absolute top-2 right-2 z-20 flex gap-1 md:hidden">
+                    <button onClick={() => setMobileScale((v) => clampScale(v - 0.1))} className="w-7 h-7 rounded bg-black/70 border border-stone-500 text-stone-200 text-sm">－</button>
+                    <button onClick={() => setMobileScale(1)} className="px-2 h-7 rounded bg-black/70 border border-stone-500 text-stone-200 text-[10px] font-bold">100%</button>
+                    <button onClick={() => setMobileScale((v) => clampScale(v + 0.1))} className="w-7 h-7 rounded bg-black/70 border border-stone-500 text-stone-200 text-sm">＋</button>
                 </div>
 
                 {/* Rotation hint */}

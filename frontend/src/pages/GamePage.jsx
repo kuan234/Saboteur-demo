@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSocket } from '../contexts/SocketContext';
 import GameBoard from '../components/GameBoard';
 import HandCards from '../components/HandCards';
 import PlayerBar from '../components/PlayerBar';
 import InfoPanel from '../components/InfoPanel';
 import ChatBox from '../components/ChatBox';
+
+
+const rotateDirs180 = (dirs = []) => {
+    if (!Array.isArray(dirs) || dirs.length !== 4) return dirs;
+    return [dirs[2], dirs[3], dirs[0], dirs[1]];
+};
 
 export default function GamePage() {
     const {
@@ -29,7 +35,11 @@ export default function GamePage() {
         const targetX = position.x;
         const targetY = position.y - 2;
 
-        const finalCard = { ...card, rotation: rotated ? 180 : 0 };
+        const finalCard = {
+            ...card,
+            rotation: rotated ? 180 : 0,
+            dirs: rotated ? rotateDirs180(card.dirs) : card.dirs,
+        };
         playCard(finalCard, targetX, targetY);
         return false;
     };
@@ -41,6 +51,32 @@ export default function GamePage() {
 
     const safePlayers = players || [];
     const currentPlayer = safePlayers.find(p => p.id === currentTurnId);
+
+
+    useEffect(() => {
+        if (!socketId) return;
+        const isMyTurn = currentTurnId === socketId;
+        const changed = prevTurnRef.current !== currentTurnId;
+        if (isMyTurn && changed) {
+            setShowMyTurnHint(true);
+            if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([120, 80, 120]);
+            const t = setTimeout(() => setShowMyTurnHint(false), 2400);
+            prevTurnRef.current = currentTurnId;
+            return () => clearTimeout(t);
+        }
+        prevTurnRef.current = currentTurnId;
+    }, [currentTurnId, socketId]);
+
+    const handleMobileDiscard = () => {
+        if (selectedCard) {
+            discardCard(selectedCard);
+            setSelectedCard(null);
+            return;
+        }
+        if (hand && hand.length > 0) {
+            discardCard(hand[0]);
+        }
+    };
 
     return (
         <div className="w-full h-full flex flex-col overflow-hidden relative"
@@ -207,13 +243,16 @@ export default function GamePage() {
 
             <div className="fixed bottom-0 left-0 right-0 z-[70] flex justify-center items-end pb-2 md:pb-4 pt-1 md:pt-2"
                 style={{
-                    minHeight: '150px',
-                    background: 'linear-gradient(to top, rgba(10,7,5,0.95) 0%, rgba(10,7,5,0.5) 60%, transparent 100%)',
+                    minHeight: '132px',
+                    paddingBottom: 'max(0.4rem, env(safe-area-inset-bottom))',
+                    background: 'linear-gradient(to top, rgba(10,7,5,0.96) 0%, rgba(10,7,5,0.55) 60%, transparent 100%)',
                 }}>
                 <HandCards
                     cards={hand || []}
                     onDragStartCard={handleDragStartCard}
-                    onDiscardCard={(c) => discardCard(c)}
+                    onDiscardCard={(c) => { discardCard(c); if (selectedCard?.id === c?.id) setSelectedCard(null); }}
+                    selectedCardId={selectedCard?.id}
+                    onSelectCard={(card) => setSelectedCard(card)}
                 />
             </div>
 
