@@ -166,6 +166,8 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
                 <div
                     key={`${c},${r}`}
                     className={`w-full h-full rounded-md transition-all duration-150 relative ${borderCls} ${glowCls}`}
+                    data-testid={`board-cell-${c}-${r}`}
+                    data-board-cell={`${c},${r - 2}`}
                     onDragOver={(e) => handleDragOver(e, c, r)}
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, c, r)}
@@ -189,10 +191,11 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
     }
 
     return (
-        <div className="relative w-full h-full flex items-center justify-center">
+        <div className="relative w-full h-full flex items-center justify-center" data-testid="game-board-shell">
             {/* Dirt / Earth textured board background */}
             <div
                 className="relative w-[98%] sm:w-[94%] md:w-[80%] lg:w-[70%] max-w-[900px] aspect-[6/5] rounded-xl md:rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.9),inset_0_0_80px_rgba(0,0,0,0.6)]"
+                data-testid="game-board"
                 style={{
                     background: 'radial-gradient(ellipse at center, #3d2b1a 0%, #1a120b 80%)',
                     border: '4px solid rgba(120,80,40,0.5)',
@@ -224,7 +227,7 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
 
                 {/* Rotation hint */}
                 {draggingCard && (
-                    <div className="absolute bottom-3 left-3 bg-black/70 text-amber-500 text-xs px-3 py-1.5 rounded-lg border border-amber-800/50 animate-glow-pulse font-bold">
+                    <div className="pointer-events-none absolute bottom-3 left-3 bg-black/70 text-amber-500 text-xs px-3 py-1.5 rounded-lg border border-amber-800/50 animate-glow-pulse font-bold">
                         当前选中卡牌 ({draggingRotation ? '已旋转' : '未旋转'})
                     </div>
                 )}

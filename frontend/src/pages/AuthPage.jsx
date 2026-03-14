@@ -18,7 +18,7 @@ export default function AuthPage() {
     };
 
     return (
-        <div className="w-full h-full flex flex-col items-center justify-center relative p-4"
+        <div className="w-full h-full flex flex-col items-center justify-center relative p-4" data-testid="auth-page"
             style={{ background: 'radial-gradient(ellipse at center, #1e1610 0%, #0a0705 100%)' }}>
 
             <div className="absolute w-96 h-96 bg-amber-600/10 rounded-full blur-[100px] pointer-events-none" />
@@ -37,6 +37,7 @@ export default function AuthPage() {
                         placeholder="输入昵称"
                         value={username}
                         onChange={e => setUsername(e.target.value)}
+                        data-testid="nickname-input"
                         className="w-full bg-stone-800 border border-stone-600 text-stone-200 px-4 py-3.5 rounded-xl focus:outline-none focus:border-amber-500 transition-colors text-base"
                     />
 
@@ -44,6 +45,7 @@ export default function AuthPage() {
 
                     <button
                         type="submit"
+                        data-testid="login-submit"
                         className="w-full py-3.5 mt-2 bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 border border-amber-500/50 rounded-xl text-white font-bold text-lg shadow-lg transition-all active:scale-95"
                     >
                         进入大厅

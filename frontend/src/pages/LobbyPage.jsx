@@ -7,10 +7,10 @@ export default function LobbyPage() {
 
     if (roomId) {
         return (
-            <div className="w-full h-full flex flex-col items-center px-3 pt-8 md:pt-16"
+            <div className="w-full h-full flex flex-col items-center px-3 pt-8 md:pt-16" data-testid="room-lobby"
                 style={{ background: 'radial-gradient(ellipse at center, #1e1610 0%, #0a0705 100%)' }}>
                 <div className="bg-stone-900/85 border border-stone-700/50 p-5 md:p-8 rounded-2xl shadow-2xl w-full max-w-xl text-center">
-                    <h2 className="text-2xl md:text-3xl text-amber-500 font-bold mb-2 font-medieval break-all">房间：{roomId}</h2>
+                    <h2 className="text-2xl md:text-3xl text-amber-500 font-bold mb-2 font-medieval break-all" data-testid="room-id-value">房间：{roomId}</h2>
                     <p className="text-stone-400 mb-5">等待玩家加入... ({playerCount}/10)</p>
 
                     <div className="bg-stone-800/50 border border-stone-700 rounded-xl p-3 md:p-4 mb-6 min-h-[180px] flex flex-col gap-2">
@@ -31,6 +31,7 @@ export default function LobbyPage() {
                             <button
                                 onClick={startGame}
                                 disabled={players.length < 2}
+                                data-testid="start-game-button"
                                 className="px-6 py-3 bg-gradient-to-b from-green-600 to-green-800 hover:from-green-500 hover:to-green-700 border border-green-500/50 rounded-xl text-white font-bold text-base md:text-lg shadow-lg transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 ▶ 开始游戏
@@ -53,7 +54,7 @@ export default function LobbyPage() {
     }
 
     return (
-        <div className="w-full h-full flex flex-col relative overflow-y-auto"
+        <div className="w-full h-full flex flex-col relative overflow-y-auto" data-testid="lobby-page"
             style={{ background: 'radial-gradient(ellipse at center, #1e1610 0%, #0a0705 100%)' }}>
 
             <div className="h-auto min-h-16 bg-stone-900/90 border-b border-stone-700/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 md:px-6 py-3 shadow-md z-10">
@@ -80,6 +81,7 @@ export default function LobbyPage() {
 
                         <button
                             onClick={createRoom}
+                            data-testid="create-room-button"
                             className="w-full py-3.5 bg-gradient-to-r from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 rounded-xl text-white font-bold text-base md:text-lg shadow-lg border border-amber-500/50 transition-all active:scale-95"
                         >
                             创建房间
@@ -95,10 +97,12 @@ export default function LobbyPage() {
                                     placeholder="输入房间 ID"
                                     value={joinId}
                                     onChange={e => setJoinId(e.target.value)}
+                                    data-testid="join-room-input"
                                     className="flex-1 bg-stone-900 border border-stone-700 px-4 py-3 rounded-xl text-stone-200 focus:outline-none focus:border-stone-500"
                                 />
                                 <button
                                     onClick={() => joinId && joinRoom(joinId)}
+                                    data-testid="join-room-button"
                                     className="px-6 py-3 bg-stone-700 hover:bg-stone-600 rounded-xl text-stone-200 font-bold transition-colors border border-stone-600"
                                 >
                                     加入

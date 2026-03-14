@@ -45,18 +45,26 @@ const getTheme = (card) => cardThemes[inferCardKind(card)] || cardThemes.break;
 
 const HandCard = ({
     card, index, totalCards, hoveredIndex, setHoveredIndex,
-    onDragStart, isRotated, toggleRotation, isMobile,
+    onDragStart, isRotated, onToggleRotation, isMobile,
     selected, onSelect, onDiscard
 }) => {
     const isHovered = !isMobile && hoveredIndex === index;
     const { rotation } = calculateCardTransform(index, totalCards);
-    const theme = getTheme(card);
+    const cardKind = inferCardKind(card);
+    const theme = cardThemes[cardKind] || cardThemes.break;
     const assetImg = getAssetImage(card);
     const isPath = card.type === 'path';
+    const cardId = card.id || `card-${index}`;
 
     return (
         <div
             className="relative flex justify-center items-end"
+            data-testid={`hand-card-${cardId}`}
+            data-card-type={card.type || 'unknown'}
+            data-card-kind={cardKind}
+            data-card-name={String(card.name || '')}
+            data-card-dirs={Array.isArray(card.dirs) ? card.dirs.join('') : ''}
+            data-card-rotated={isRotated ? 'true' : 'false'}
             style={{
                 transform: `rotate(${isMobile ? 0 : (isHovered ? 0 : rotation)}deg) translateY(${isHovered ? -10 : 0}px)`,
                 zIndex: selected ? 80 : (isHovered ? 60 : index),
@@ -65,26 +73,30 @@ const HandCard = ({
             onMouseEnter={() => { if (!isMobile) setHoveredIndex(index); }}
             onMouseLeave={() => { if (!isMobile) setHoveredIndex(null); }}
             draggable
-            onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart(e, card, isRotated); }}
+            onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart(e, card); }}
             onDragEnd={() => setHoveredIndex(null)}
-            onDoubleClick={() => { if (isPath) toggleRotation(card.id); }}
+            onDoubleClick={() => { if (isPath) onToggleRotation?.(cardId); }}
             onClick={() => onSelect?.(card)}
         >
             {isMobile && selected && (
-                <div className="absolute -top-10 left-1/2 z-[90] flex -translate-x-1/2 gap-2">
+                <div className="pointer-events-none absolute -top-12 left-1/2 z-[90] flex -translate-x-1/2 gap-2">
                     {isPath && (
                         <button
-                            className="rounded-full border border-amber-400 bg-amber-700/90 px-3 py-1 text-[11px] font-bold text-white shadow-lg"
+                            type="button"
+                            data-testid={`rotate-card-${cardId}`}
+                            className="pointer-events-auto min-h-11 rounded-full border border-amber-400 bg-amber-700/90 px-3 py-1 text-[11px] font-bold text-white shadow-lg"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                toggleRotation(card.id);
+                                onToggleRotation?.(cardId);
                             }}
                         >
                             🔁 旋转
                         </button>
                     )}
                     <button
-                        className="rounded-full border border-red-400 bg-red-700/90 px-3 py-1 text-[11px] font-bold text-white shadow-lg"
+                        type="button"
+                        data-testid={`discard-card-${cardId}`}
+                        className="pointer-events-auto min-h-11 rounded-full border border-red-400 bg-red-700/90 px-3 py-1 text-[11px] font-bold text-white shadow-lg"
                         onClick={(e) => {
                             e.stopPropagation();
                             onDiscard?.(card);
@@ -97,6 +109,7 @@ const HandCard = ({
 
             <div
                 className={`w-20 h-32 sm:w-24 sm:h-36 md:w-32 md:h-48 lg:w-36 lg:h-52 rounded-xl overflow-hidden cursor-grab active:cursor-grabbing border-2 shadow-[0_6px_20px_rgba(0,0,0,0.7)] ${selected ? 'border-amber-300 shadow-[0_0_22px_rgba(251,191,36,0.6)]' : (isHovered ? 'border-amber-400' : theme.border)} flex flex-col relative`}
+                data-testid={`hand-card-face-${cardId}`}
                 style={assetImg ? {
                     backgroundImage: `url(${assetImg})`,
                     backgroundSize: 'cover',
@@ -148,9 +161,16 @@ const HandCard = ({
     );
 };
 
-export default function HandCards({ cards, onDragStartCard, onDiscardCard, selectedCardId, onSelectCard }) {
+export default function HandCards({
+    cards,
+    onDragStartCard,
+    onDiscardCard,
+    selectedCardId,
+    onSelectCard,
+    rotatedCardIds = {},
+    onToggleRotation
+}) {
     const [hoveredIndex, setHoveredIndex] = useState(null);
-    const [rotations, setRotations] = useState({});
     const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
 
     useEffect(() => {
@@ -161,12 +181,8 @@ export default function HandCards({ cards, onDragStartCard, onDiscardCard, selec
 
     const displayCards = cards || [];
 
-    const toggleRotation = (cardId) => {
-        setRotations(prev => ({ ...prev, [cardId]: !prev[cardId] }));
-    };
-
     return (
-        <div className="w-full relative flex justify-center items-end px-2 md:px-4 overflow-x-auto pb-1">
+        <div className="w-full relative flex justify-center items-end px-2 md:px-4 overflow-x-auto pb-1" data-testid="hand-cards">
             <div className="flex justify-start md:justify-center items-end min-w-max px-3 md:px-0" style={{ gap: isMobile ? '0.5rem' : '0.25rem' }}>
                 {displayCards.map((card, index) => (
                     <div key={card.id || index} style={{ marginLeft: isMobile ? '0' : (index > 0 ? '-1.1rem' : '0') }}>
@@ -178,10 +194,10 @@ export default function HandCards({ cards, onDragStartCard, onDiscardCard, selec
                             setHoveredIndex={setHoveredIndex}
                             onDragStart={onDragStartCard}
                             onDiscard={onDiscardCard}
-                            isRotated={rotations[card.id] || false}
-                            toggleRotation={toggleRotation}
+                            isRotated={!!rotatedCardIds[card.id || `card-${index}`]}
+                            onToggleRotation={onToggleRotation}
                             isMobile={isMobile}
-                            selected={selectedCardId === card.id}
+                            selected={selectedCardId === (card.id || `card-${index}`)}
                             onSelect={onSelectCard}
                         />
                     </div>
