@@ -25,9 +25,6 @@ export default function GamePage() {
     const [draggingRotation, setDraggingRotation] = useState(false);
     const [mobilePanel, setMobilePanel] = useState('info');
     const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
-    const [selectedCard, setSelectedCard] = useState(null);
-    const [showMyTurnHint, setShowMyTurnHint] = useState(false);
-    const prevTurnRef = useRef(null);
 
     const handleDragStartCard = (e, card, isRotated) => {
         setDraggingCard(card);
@@ -130,12 +127,6 @@ export default function GamePage() {
                 </div>
             )}
 
-            {showMyTurnHint && (
-                <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[90] px-4 py-2 rounded-xl bg-amber-700/90 border border-amber-300 text-white text-sm font-bold shadow-2xl animate-pulse">
-                    ✨ 轮到你行动了
-                </div>
-            )}
-
             <PlayerBar
                 players={safePlayers}
                 currentTurnId={currentTurnId}
@@ -162,37 +153,29 @@ export default function GamePage() {
                 </div>
             </div>
 
-            <div className="lg:hidden fixed inset-x-3 bottom-[146px] z-[75] flex items-center justify-between gap-2">
-                <div className="flex gap-2">
-                    <button
-                        onClick={() => {
-                            setMobileDrawerOpen(true);
-                            setMobilePanel('info');
-                        }}
-                        className="px-3 py-2 rounded-xl bg-stone-900/85 border border-amber-500/40 text-amber-200 text-xs font-bold"
-                    >
-                        📜 战况
-                    </button>
-                    <button
-                        onClick={() => {
-                            setMobileDrawerOpen(true);
-                            setMobilePanel('chat');
-                        }}
-                        className="px-3 py-2 rounded-xl bg-stone-900/85 border border-blue-500/40 text-blue-200 text-xs font-bold"
-                    >
-                        💬 聊天
-                    </button>
-                </div>
+            <div className="lg:hidden fixed left-3 bottom-[168px] z-[75] flex gap-2">
                 <button
-                    onClick={handleMobileDiscard}
-                    className="px-3 py-2 rounded-xl bg-red-900/85 border border-red-400/40 text-red-100 text-xs font-bold shadow-lg"
+                    onClick={() => {
+                        setMobileDrawerOpen(true);
+                        setMobilePanel('info');
+                    }}
+                    className="px-3 py-2 rounded-xl bg-stone-900/85 border border-amber-500/40 text-amber-200 text-xs font-bold"
                 >
-                    🗑️ 弃牌
+                    📜 战况
+                </button>
+                <button
+                    onClick={() => {
+                        setMobileDrawerOpen(true);
+                        setMobilePanel('chat');
+                    }}
+                    className="px-3 py-2 rounded-xl bg-stone-900/85 border border-blue-500/40 text-blue-200 text-xs font-bold"
+                >
+                    💬 聊天
                 </button>
             </div>
 
             {mobileDrawerOpen && (
-                <div className="lg:hidden fixed inset-x-0 bottom-[126px] z-[76] px-3">
+                <div className="lg:hidden fixed inset-x-0 bottom-[148px] z-[76] px-3">
                     <div className="rounded-2xl border border-stone-600 bg-stone-950/95 backdrop-blur-md shadow-2xl overflow-hidden">
                         <div className="flex items-center justify-between px-3 py-2 border-b border-stone-700">
                             <div className="flex gap-2">
@@ -253,7 +236,6 @@ export default function GamePage() {
                     </div>
                 </div>
             )}
-
 
             <div className="hidden md:block">
                 <ChatBox messages={chatMessages || []} onSendMessage={sendChat} />
