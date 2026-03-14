@@ -70,6 +70,31 @@ const HandCard = ({
             onDoubleClick={() => { if (isPath) toggleRotation(card.id); }}
             onClick={() => onSelect?.(card)}
         >
+            {isMobile && selected && (
+                <div className="absolute -top-10 left-1/2 z-[90] flex -translate-x-1/2 gap-2">
+                    {isPath && (
+                        <button
+                            className="rounded-full border border-amber-400 bg-amber-700/90 px-3 py-1 text-[11px] font-bold text-white shadow-lg"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                toggleRotation(card.id);
+                            }}
+                        >
+                            🔁 旋转
+                        </button>
+                    )}
+                    <button
+                        className="rounded-full border border-red-400 bg-red-700/90 px-3 py-1 text-[11px] font-bold text-white shadow-lg"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onDiscard?.(card);
+                        }}
+                    >
+                        🗑️ 弃牌
+                    </button>
+                </div>
+            )}
+
             <div
                 className={`w-20 h-32 sm:w-24 sm:h-36 md:w-32 md:h-48 lg:w-36 lg:h-52 rounded-xl overflow-hidden cursor-grab active:cursor-grabbing border-2 shadow-[0_6px_20px_rgba(0,0,0,0.7)] ${selected ? 'border-amber-300 shadow-[0_0_22px_rgba(251,191,36,0.6)]' : (isHovered ? 'border-amber-400' : theme.border)} flex flex-col relative`}
                 style={assetImg ? {
@@ -111,7 +136,7 @@ const HandCard = ({
                     </div>
                     {isPath && (
                         <div className="bg-amber-800/80 rounded mx-1 mb-1 text-center py-0.5 border border-amber-500/30">
-                            <span className="text-[8px] text-amber-200 font-bold tracking-widest leading-none">双击旋转</span>
+                            <span className="text-[8px] text-amber-200 font-bold tracking-widest leading-none">双击或按钮旋转</span>
                         </div>
                     )}
                     <p className="text-[9px] text-stone-200 text-center leading-tight line-clamp-2 px-1">
