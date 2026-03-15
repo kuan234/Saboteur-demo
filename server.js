@@ -421,8 +421,15 @@ function startGame(roomId) {
         players.forEach(player => { if (room.deck.length > 0) player.hand.push(room.deck.pop()); });
     }
 
+    ensureScoreEntries(room);
     players.forEach(player => {
-        io.to(player.id).emit('gameStarted', { yourRole: player.role, yourHand: player.hand, board: room.board });
+        io.to(player.id).emit('gameStarted', {
+            yourRole: player.role,
+            yourHand: player.hand,
+            board: room.board,
+            round: room.round,
+            scores: room.scores
+        });
     });
 
     room.currentPlayerIndex = 0;
@@ -551,6 +558,21 @@ io.on('connection', (socket) => {
             socket.emit('errorMsg', '只有房主可以开始游戏！');
             return;
         }
+        startGame(roomId);
+    });
+
+    socket.on('requestRematch', (data) => {
+        const { roomId } = data || {};
+        const room = rooms[roomId];
+        if (!room) return;
+        if (socket.id !== room.hostId) {
+            socket.emit('errorMsg', '只有房主可以发起再来一局！');
+            return;
+        }
+
+        room.round = 1;
+        room.scores = {};
+        io.to(roomId).emit('gameMsg', '房主发起了再来一局，新的对局开始！');
         startGame(roomId);
     });
 

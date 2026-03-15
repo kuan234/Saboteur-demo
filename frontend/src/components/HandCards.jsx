@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const calculateCardTransform = (index, totalCards) => {
     if (totalCards <= 1) return { rotation: 0 };
@@ -55,6 +55,19 @@ const HandCard = ({
     const assetImg = getAssetImage(card);
     const isPath = card.type === 'path';
     const cardId = card.id || `card-${index}`;
+    const [rotationFlash, setRotationFlash] = useState(false);
+    const didMountRef = useRef(false);
+
+    useEffect(() => {
+        if (!isPath) return undefined;
+        if (!didMountRef.current) {
+            didMountRef.current = true;
+            return undefined;
+        }
+        setRotationFlash(true);
+        const timer = window.setTimeout(() => setRotationFlash(false), 260);
+        return () => window.clearTimeout(timer);
+    }, [isPath, isRotated]);
 
     return (
         <div
@@ -66,9 +79,10 @@ const HandCard = ({
             data-card-dirs={Array.isArray(card.dirs) ? card.dirs.join('') : ''}
             data-card-rotated={isRotated ? 'true' : 'false'}
             style={{
-                transform: `rotate(${isMobile ? 0 : (isHovered ? 0 : rotation)}deg) translateY(${isHovered ? -10 : 0}px)`,
+                transform: `rotate(${isMobile ? 0 : (isHovered ? 0 : rotation)}deg) translateY(${selected ? -10 : (isHovered ? -10 : 0)}px)`,
                 zIndex: selected ? 80 : (isHovered ? 60 : index),
-                transition: 'transform 0.2s ease',
+                transition: 'transform 0.22s ease, filter 0.22s ease',
+                filter: rotationFlash ? 'drop-shadow(0 0 14px rgba(251,191,36,0.5))' : 'none',
             }}
             onMouseEnter={() => { if (!isMobile) setHoveredIndex(index); }}
             onMouseLeave={() => { if (!isMobile) setHoveredIndex(null); }}
@@ -79,7 +93,7 @@ const HandCard = ({
             onClick={() => onSelect?.(card)}
         >
             {isMobile && selected && (
-                <div className="pointer-events-none absolute -top-12 left-1/2 z-[90] flex -translate-x-1/2 gap-2">
+                <div className="pointer-events-none absolute -top-[3.35rem] left-1/2 z-[90] flex -translate-x-1/2 gap-2">
                     {isPath && (
                         <button
                             type="button"
@@ -119,6 +133,11 @@ const HandCard = ({
                 } : { backgroundColor: '#1c1917' }}
             >
                 <div className="absolute inset-0 bg-black/35 pointer-events-none" />
+                {isPath && isRotated && (
+                    <div className="absolute right-1.5 top-1.5 z-20 rounded-full border border-amber-300/60 bg-amber-600/90 px-1.5 py-0.5 text-[9px] font-black tracking-wide text-white shadow-lg">
+                        已旋转
+                    </div>
+                )}
 
                 {!isMobile && (
                     <div className="relative px-2 pt-2 pb-1 z-10 flex justify-between">
@@ -139,8 +158,22 @@ const HandCard = ({
                     </h4>
                 </div>
 
-                <div className={`flex-1 mx-2 mb-1 flex items-center justify-center overflow-hidden z-10 ${isRotated ? 'rotate-180' : ''}`}>
-                    {isPath && <span className="text-4xl md:text-5xl text-amber-300 font-bold" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}>{card.name || '🛤️'}</span>}
+                <div
+                    className="flex-1 mx-1.5 mb-1 flex items-center justify-center overflow-hidden z-10"
+                    style={{
+                        transition: 'transform 0.36s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.22s ease',
+                        transform: `rotate(${isRotated ? 180 : 0}deg) scale(${isMobile ? (isRotated ? 1.2 : 1.16) : (isRotated ? 1.08 : 1.02)})`,
+                        filter: rotationFlash ? 'brightness(1.2) drop-shadow(0 0 10px rgba(251,191,36,0.45))' : 'none',
+                    }}
+                >
+                    {isPath && (
+                        <span
+                            className="text-[3.5rem] sm:text-[3.8rem] md:text-5xl text-amber-300 font-black leading-none"
+                            style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}
+                        >
+                            {card.name || '🛤️'}
+                        </span>
+                    )}
                 </div>
 
                 <div className="px-2 pb-2 z-10 w-full bg-black/45">
@@ -182,10 +215,27 @@ export default function HandCards({
     const displayCards = cards || [];
 
     return (
-        <div className="w-full relative flex justify-center items-end px-2 md:px-4 overflow-x-auto pb-1" data-testid="hand-cards">
-            <div className="flex justify-start md:justify-center items-end min-w-max px-3 md:px-0" style={{ gap: isMobile ? '0.5rem' : '0.25rem' }}>
+        <div className="w-full relative overflow-visible" data-testid="hand-cards">
+            <div
+                className="overflow-x-auto overflow-y-hidden pb-1"
+                style={{
+                    paddingTop: isMobile ? '4.35rem' : '0.25rem',
+                    paddingLeft: isMobile ? '1.5rem' : '0',
+                    paddingRight: isMobile ? '1.5rem' : '0',
+                    scrollPaddingLeft: isMobile ? '1.5rem' : '0',
+                    scrollPaddingRight: isMobile ? '1.5rem' : '0',
+                }}
+            >
+            <div className="flex justify-start md:justify-center items-end min-w-max px-1 md:px-0" style={{ gap: isMobile ? '0.5rem' : '0.25rem' }}>
                 {displayCards.map((card, index) => (
-                    <div key={card.id || index} style={{ marginLeft: isMobile ? '0' : (index > 0 ? '-1.1rem' : '0') }}>
+                    <div
+                        key={card.id || index}
+                        style={{
+                            marginLeft: isMobile ? '0' : (index > 0 ? '-1.1rem' : '0'),
+                            paddingLeft: isMobile && index === 0 ? '0.25rem' : '0',
+                            paddingRight: isMobile && index === displayCards.length - 1 ? '0.25rem' : '0',
+                        }}
+                    >
                         <HandCard
                             card={card}
                             index={index}
@@ -202,6 +252,7 @@ export default function HandCards({
                         />
                     </div>
                 ))}
+            </div>
             </div>
         </div>
     );

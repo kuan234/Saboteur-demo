@@ -46,7 +46,8 @@ export default function GamePage() {
         board, hand, playCard, discardCard, leaveRoom,
         logs, chatMessages, sendChat, myRole,
         mapResult, roundResult, gameOverResult, clearRoundResult, clearGameOver,
-        speakerEnabled, micEnabled, voiceError, toggleSpeaker, toggleMic
+        speakerEnabled, micEnabled, voiceError, toggleSpeaker, toggleMic,
+        isHost, requestRematch, round
     } = useSocket();
 
     const [draggingCard, setDraggingCard] = useState(null);
@@ -62,6 +63,7 @@ export default function GamePage() {
     const [eventBanner, setEventBanner] = useState('');
     const [actionPulse, setActionPulse] = useState(false);
     const [showAllMobileLogs, setShowAllMobileLogs] = useState(false);
+    const [rematchPending, setRematchPending] = useState(false);
     const prevTurnRef = useRef(null);
 
     const safePlayers = players || [];
@@ -232,8 +234,14 @@ export default function GamePage() {
         return () => clearTimeout(t);
     }, [logs]);
 
+    useEffect(() => {
+        if (!gameOverResult) {
+            setRematchPending(false);
+        }
+    }, [gameOverResult]);
+
     return (
-        <div className="w-full h-full flex flex-col overflow-hidden relative" data-testid="game-page"
+        <div className="w-full h-full flex flex-col overflow-hidden relative" data-testid="game-page" data-current-round={String(round || 1)}
             style={{ background: 'radial-gradient(ellipse at 50% 40%, #1e1610 0%, #0a0705 100%)' }}>
 
             <div className="absolute top-0 left-0 w-64 h-64 pointer-events-none opacity-30"
@@ -365,7 +373,7 @@ export default function GamePage() {
                 </div>
             </div>
 
-            <div className="lg:hidden fixed left-3 bottom-[168px] z-[75] flex gap-2">
+            <div className="lg:hidden fixed left-3 bottom-[168px] z-[65] flex gap-2">
                 <button
                     onClick={() => openMobilePanel('info')}
                     data-testid="mobile-info-button"
@@ -551,22 +559,24 @@ export default function GamePage() {
                 <ChatBox messages={chatMessages || []} onSendMessage={sendChat} />
             </div>
 
-            <div className={`fixed bottom-0 left-0 right-0 z-[70] flex justify-center items-end pb-2 md:pb-4 pt-1 md:pt-2 ${actionPulse ? 'scale-[1.01]' : 'scale-100'}`} data-testid="hand-zone"
+            <div className={`fixed bottom-0 left-0 right-0 z-[62] pointer-events-none flex justify-center items-end overflow-visible pb-2 md:pb-4 pt-1 md:pt-2 ${actionPulse ? 'scale-[1.01]' : 'scale-100'}`} data-testid="hand-zone"
                 style={{
-                    minHeight: '132px',
+                    minHeight: '164px',
                     paddingBottom: 'max(0.4rem, env(safe-area-inset-bottom))',
-                    background: 'linear-gradient(to top, rgba(10,7,5,0.96) 0%, rgba(10,7,5,0.55) 60%, transparent 100%)',
+                    background: 'linear-gradient(to top, rgba(10,7,5,0.82) 0%, rgba(10,7,5,0.28) 55%, transparent 100%)',
                     transition: 'transform 0.2s ease',
                 }}>
-                <HandCards
-                    cards={safeHand}
-                    onDragStartCard={handleDragStartCard}
-                    onDiscardCard={handleDiscardCard}
-                    selectedCardId={selectedCardId}
-                    onSelectCard={handleSelectCard}
-                    rotatedCardIds={rotatedCardIds}
-                    onToggleRotation={toggleCardRotation}
-                />
+                <div className="pointer-events-auto w-full flex justify-center">
+                    <HandCards
+                        cards={safeHand}
+                        onDragStartCard={handleDragStartCard}
+                        onDiscardCard={handleDiscardCard}
+                        selectedCardId={selectedCardId}
+                        onSelectCard={handleSelectCard}
+                        rotatedCardIds={rotatedCardIds}
+                        onToggleRotation={toggleCardRotation}
+                    />
+                </div>
             </div>
 
             {tutorialOpen && (
@@ -606,7 +616,7 @@ export default function GamePage() {
             )}
 
             {mapResult && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                <div className="fixed inset-0 z-[88] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" data-testid="map-result-modal">
                     <div className="bg-stone-900 border-2 border-amber-500 rounded-xl p-6 text-center max-w-sm w-full">
                         <h2 className="text-2xl text-amber-500 font-bold mb-4 font-medieval">地图探秘</h2>
                         <div className="text-6xl mb-4">{mapResult.isTreasure ? '💎' : '🪨'}</div>
@@ -619,15 +629,15 @@ export default function GamePage() {
             )}
 
             {roundResult && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+                <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/90 backdrop-blur-md p-4" data-testid="round-result-modal">
                     <div className="bg-stone-900 border-2 border-amber-500 rounded-xl p-5 md:p-8 text-center max-w-lg w-full">
                         <h2 className="text-2xl md:text-3xl text-amber-500 font-bold mb-6 font-medieval">回合结束</h2>
                         <p className="text-stone-200 text-base md:text-lg mb-6">{roundResult.msg}</p>
-                        <ul className="text-left text-stone-300 mb-8 max-h-40 overflow-y-auto space-y-2">
+                        <ul className="text-left text-stone-300 mb-8 max-h-40 overflow-y-auto space-y-2" data-testid="round-score-list">
                             {roundResult.players?.map((p, i) => {
                                 const gain = roundResult.delta && roundResult.delta[p.playerKey] ? `(+${roundResult.delta[p.playerKey]})` : '';
                                 return (
-                                    <li key={i} className="flex justify-between border-b border-stone-800 pb-1 text-sm md:text-base">
+                                    <li key={i} className="flex justify-between border-b border-stone-800 pb-1 text-sm md:text-base" data-testid={`round-score-row-${i}`} data-score-value={String(roundResult.scores[p.playerKey] || 0)}>
                                         <span>{p.name} ({p.role === 'Gold Miner' ? '矿工' : '破坏者'})</span>
                                         <span className="text-amber-400 font-bold">{roundResult.scores[p.playerKey] || 0} {gain}</span>
                                     </li>
@@ -636,6 +646,7 @@ export default function GamePage() {
                         </ul>
                         <button
                             onClick={clearRoundResult}
+                            data-testid="round-continue-button"
                             className="px-6 py-3 bg-gradient-to-b from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 rounded-lg text-white font-bold border border-amber-500/50"
                         >
                             继续下一轮
@@ -645,22 +656,39 @@ export default function GamePage() {
             )}
 
             {gameOverResult && (
-                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+                <div className="fixed inset-0 z-[91] flex items-center justify-center bg-black/90 backdrop-blur-md p-4" data-testid="game-over-modal">
                     <div className="bg-stone-900 border-2 border-red-500 rounded-xl p-5 md:p-8 text-center max-w-lg w-full">
                         <h2 className="text-3xl md:text-4xl text-red-500 font-bold mb-6 font-medieval">游戏结束</h2>
                         <p className="text-stone-200 text-base md:text-lg mb-6">{gameOverResult.msg}</p>
                         <h3 className="text-amber-500 font-bold mb-2">最终得分：</h3>
-                        <ul className="text-left text-stone-300 mb-8 max-h-40 overflow-y-auto space-y-2 bg-stone-950 p-4 rounded">
+                        <ul className="text-left text-stone-300 mb-8 max-h-40 overflow-y-auto space-y-2 bg-stone-950 p-4 rounded" data-testid="final-score-list">
                             {(gameOverResult.players || []).sort((a, b) => (gameOverResult.scores[b.playerKey] || 0) - (gameOverResult.scores[a.playerKey] || 0)).map((p, i) => (
-                                <li key={i} className="flex justify-between border-b border-stone-800 pb-1 text-sm md:text-base">
+                                <li key={i} className="flex justify-between border-b border-stone-800 pb-1 text-sm md:text-base" data-testid={`final-score-row-${i}`} data-score-value={String(gameOverResult.scores[p.playerKey] || 0)}>
                                     <span>#{i + 1} {p.name} ({p.role === 'Gold Miner' ? '矿工' : '破坏者'})</span>
                                     <span className="text-amber-400 font-bold text-lg md:text-xl">{gameOverResult.scores[p.playerKey] || 0}</span>
                                 </li>
                             ))}
                         </ul>
+                        {isHost ? (
+                            <button
+                                onClick={() => {
+                                    setRematchPending(true);
+                                    requestRematch();
+                                }}
+                                disabled={rematchPending}
+                                data-testid="rematch-button"
+                                className="mb-3 w-full px-6 py-3 bg-gradient-to-b from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 rounded-lg text-white font-bold border border-emerald-500/50 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {rematchPending ? '正在开启新对局...' : '再来一局'}
+                            </button>
+                        ) : (
+                            <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-900/20 px-4 py-3 text-sm text-amber-200" data-testid="rematch-waiting">
+                                等待房主发起再来一局，原房间成员会直接进入新对局。
+                            </div>
+                        )}
                         <button
                             onClick={clearGameOver}
-                            className="px-6 py-3 bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 rounded-lg text-white font-bold border border-red-500/50"
+                            className="w-full px-6 py-3 bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 rounded-lg text-white font-bold border border-red-500/50"
                         >
                             返回大厅
                         </button>

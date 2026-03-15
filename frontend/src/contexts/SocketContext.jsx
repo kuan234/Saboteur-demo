@@ -196,6 +196,11 @@ export function SocketProvider({ children }) {
             setMyRole(data.yourRole);
             setHand(data.yourHand);
             setBoard(data.board);
+            setRound(data.round || 1);
+            setScores(data.scores || {});
+            setRoundResult(null);
+            setGameOverResult(null);
+            setMapResult(null);
             setLogs([{ time: now(), message: '游戏开始！' }]);
         });
 
@@ -240,7 +245,6 @@ export function SocketProvider({ children }) {
         socket.on('finalGameOver', (data) => {
             setGameOverResult(data);
             setScores(data.scores || {});
-            setGameActive(false);
             setLogs(prev => [...prev, { time: now(), message: `🏁 ${data.msg}` }]);
         });
 
@@ -407,6 +411,9 @@ export function SocketProvider({ children }) {
     const startGame = useCallback(() => {
         if (roomId) socketRef.current?.emit('requestStartGame', { roomId });
     }, [roomId]);
+    const requestRematch = useCallback(() => {
+        if (roomId) socketRef.current?.emit('requestRematch', { roomId });
+    }, [roomId]);
 
     const joinMatchQueue = useCallback(() => {
         socketRef.current?.emit('joinMatchQueue');
@@ -482,6 +489,7 @@ export function SocketProvider({ children }) {
     const clearRoundResult = useCallback(() => setRoundResult(null), []);
     const clearGameOver = useCallback(() => {
         setGameOverResult(null);
+        setGameActive(false);
         setRoomId(null);
         localStorage.removeItem('saboteur_roomId');
         localStorage.removeItem('saboteur_playerKey');
@@ -494,7 +502,7 @@ export function SocketProvider({ children }) {
         // Auth
         user, isAuthenticated, quickLogin, login, register, logout,
         // Room
-        roomId, isHost, playerKey, players, playerCount, createRoom, joinRoom, leaveRoom, startGame,
+        roomId, isHost, playerKey, players, playerCount, createRoom, joinRoom, leaveRoom, startGame, requestRematch,
         // Match
         matchQueue, joinMatchQueue, leaveMatchQueue,
         // Game
