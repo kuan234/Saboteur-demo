@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSocket } from '../contexts/SocketContext';
 
 export default function AuthPage() {
-    const { quickLogin } = useSocket();
-    const [username, setUsername] = useState('');
+    const { quickLogin, user } = useSocket();
+    const [username, setUsername] = useState(user?.nickname || '');
     const [error, setError] = useState('');
+
+    useEffect(() => {
+        setUsername(user?.nickname || '');
+    }, [user?.nickname]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();

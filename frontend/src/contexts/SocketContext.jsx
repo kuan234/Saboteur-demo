@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 
 const SocketContext = createContext(null);
@@ -8,6 +8,111 @@ const RTC_CONFIG = {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
 };
 
+const STORAGE_KEYS = {
+    username: 'saboteur_username',
+    roomId: 'saboteur_room_id',
+    playerKey: 'saboteur_player_key',
+    lastJoinMode: 'saboteur_last_join_mode',
+    legacyUser: 'saboteur_user',
+    legacyToken: 'saboteur_token',
+    legacyRoomId: 'saboteur_roomId',
+    legacyPlayerKey: 'saboteur_playerKey'
+};
+
+function createLocalUser(username) {
+    const cleanName = String(username || '').trim();
+    if (!cleanName) return null;
+    return {
+        id: `guest:${cleanName}`,
+        username: cleanName,
+        nickname: cleanName
+    };
+}
+
+function readStoredUsername() {
+    if (typeof window === 'undefined') return '';
+
+    const storedUsername = localStorage.getItem(STORAGE_KEYS.username);
+    if (storedUsername) {
+        return storedUsername;
+    }
+
+    const legacyUser = localStorage.getItem(STORAGE_KEYS.legacyUser);
+    if (!legacyUser) {
+        return '';
+    }
+
+    try {
+        const parsedUser = JSON.parse(legacyUser);
+        return String(parsedUser?.nickname || parsedUser?.username || '').trim();
+    } catch {
+        return '';
+    }
+}
+
+function readStoredRoomSession() {
+    if (typeof window === 'undefined') {
+        return { roomId: '', playerKey: '', lastJoinMode: '' };
+    }
+
+    return {
+        roomId: localStorage.getItem(STORAGE_KEYS.roomId) || localStorage.getItem(STORAGE_KEYS.legacyRoomId) || '',
+        playerKey: localStorage.getItem(STORAGE_KEYS.playerKey) || localStorage.getItem(STORAGE_KEYS.legacyPlayerKey) || '',
+        lastJoinMode: localStorage.getItem(STORAGE_KEYS.lastJoinMode) || ''
+    };
+}
+
+function saveStoredUsername(username) {
+    if (typeof window === 'undefined') return;
+
+    const cleanName = String(username || '').trim();
+    if (!cleanName) return;
+
+    localStorage.setItem(STORAGE_KEYS.username, cleanName);
+    localStorage.removeItem(STORAGE_KEYS.legacyUser);
+    localStorage.removeItem(STORAGE_KEYS.legacyToken);
+}
+
+function saveStoredRoomSession({ roomId, playerKey, lastJoinMode }) {
+    if (typeof window === 'undefined') return;
+
+    if (roomId) {
+        localStorage.setItem(STORAGE_KEYS.roomId, roomId);
+    }
+    if (playerKey) {
+        localStorage.setItem(STORAGE_KEYS.playerKey, playerKey);
+    }
+    if (lastJoinMode) {
+        localStorage.setItem(STORAGE_KEYS.lastJoinMode, lastJoinMode);
+    }
+
+    localStorage.removeItem(STORAGE_KEYS.legacyRoomId);
+    localStorage.removeItem(STORAGE_KEYS.legacyPlayerKey);
+}
+
+function clearStoredRoomSession() {
+    if (typeof window === 'undefined') return;
+
+    localStorage.removeItem(STORAGE_KEYS.roomId);
+    localStorage.removeItem(STORAGE_KEYS.playerKey);
+    localStorage.removeItem(STORAGE_KEYS.lastJoinMode);
+    localStorage.removeItem(STORAGE_KEYS.legacyRoomId);
+    localStorage.removeItem(STORAGE_KEYS.legacyPlayerKey);
+}
+
+function clearStoredProfile() {
+    if (typeof window === 'undefined') return;
+
+    clearStoredRoomSession();
+    localStorage.removeItem(STORAGE_KEYS.username);
+    localStorage.removeItem(STORAGE_KEYS.legacyUser);
+    localStorage.removeItem(STORAGE_KEYS.legacyToken);
+}
+
+function now() {
+    return new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
 export function SocketProvider({ children }) {
     const socketRef = useRef(null);
     const peerConnectionsRef = useRef(new Map());
@@ -16,20 +121,21 @@ export function SocketProvider({ children }) {
     const speakerEnabledRef = useRef(false);
     const micEnabledRef = useRef(false);
     const roomIdRef = useRef(null);
+    const playerKeyRef = useRef(readStoredRoomSession().playerKey || null);
+    const errorTimerRef = useRef(null);
 
-    // Auth
-    const [user, setUser] = useState(null);
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const initialUsername = readStoredUsername();
 
-    // Room / Lobby
+    const [user, setUser] = useState(() => createLocalUser(initialUsername));
+    const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(initialUsername));
+
     const [roomId, setRoomId] = useState(null);
-    const [playerKey, setPlayerKey] = useState(null);
+    const [playerKey, setPlayerKey] = useState(() => readStoredRoomSession().playerKey || null);
     const [isHost, setIsHost] = useState(false);
     const [players, setPlayers] = useState([]);
     const [playerCount, setPlayerCount] = useState(0);
     const [matchQueue, setMatchQueue] = useState({ inQueue: false, count: 0 });
 
-    // Game
     const [gameActive, setGameActive] = useState(false);
     const [myRole, setMyRole] = useState(null);
     const [hand, setHand] = useState([]);
@@ -38,12 +144,10 @@ export function SocketProvider({ children }) {
     const [round, setRound] = useState(1);
     const [scores, setScores] = useState({});
 
-    // Voice
     const [speakerEnabled, setSpeakerEnabled] = useState(false);
     const [micEnabled, setMicEnabled] = useState(false);
     const [voiceError, setVoiceError] = useState('');
 
-    // UI
     const [logs, setLogs] = useState([]);
     const [chatMessages, setChatMessages] = useState([]);
     const [errorMsg, setErrorMsg] = useState(null);
@@ -51,15 +155,27 @@ export function SocketProvider({ children }) {
     const [gameOverResult, setGameOverResult] = useState(null);
     const [mapResult, setMapResult] = useState(null);
 
+    const showError = useCallback((message) => {
+        if (!message) return;
+        setErrorMsg(message);
+        if (errorTimerRef.current) {
+            clearTimeout(errorTimerRef.current);
+        }
+        errorTimerRef.current = setTimeout(() => {
+            setErrorMsg(null);
+            errorTimerRef.current = null;
+        }, 4000);
+    }, []);
+
     const stopLocalMicTracks = useCallback(() => {
         if (localStreamRef.current) {
-            localStreamRef.current.getTracks().forEach(t => t.stop());
+            localStreamRef.current.getTracks().forEach(track => track.stop());
             localStreamRef.current = null;
         }
     }, []);
 
     const closeAllVoiceConnections = useCallback(() => {
-        peerConnectionsRef.current.forEach(pc => pc.close());
+        peerConnectionsRef.current.forEach(connection => connection.close());
         peerConnectionsRef.current.clear();
 
         remoteAudiosRef.current.forEach(audio => {
@@ -78,26 +194,26 @@ export function SocketProvider({ children }) {
             audio.muted = !enabled;
             if (enabled) {
                 audio.play().catch(() => {
-                    // Some browsers require additional gesture.
+                    // Some browsers require a follow-up gesture.
                 });
             }
         });
     }, []);
 
     const ensurePeerConnection = useCallback((targetId) => {
-        const existing = peerConnectionsRef.current.get(targetId);
-        if (existing) return existing;
+        const existingConnection = peerConnectionsRef.current.get(targetId);
+        if (existingConnection) return existingConnection;
 
         const socket = socketRef.current;
-        const pc = new RTCPeerConnection(RTC_CONFIG);
+        const connection = new RTCPeerConnection(RTC_CONFIG);
 
-        pc.onicecandidate = (event) => {
+        connection.onicecandidate = (event) => {
             if (event.candidate) {
                 socket?.emit('voice-ice-candidate', { targetId, candidate: event.candidate });
             }
         };
 
-        pc.ontrack = (event) => {
+        connection.ontrack = (event) => {
             let audio = remoteAudiosRef.current.get(targetId);
             if (!audio) {
                 audio = new Audio();
@@ -109,22 +225,23 @@ export function SocketProvider({ children }) {
             audio.muted = !speakerEnabledRef.current;
             if (speakerEnabledRef.current) {
                 audio.play().catch(() => {
-                    // Some browsers require additional gesture.
+                    // Some browsers require a follow-up gesture.
                 });
             }
         };
 
-        peerConnectionsRef.current.set(targetId, pc);
-        return pc;
+        peerConnectionsRef.current.set(targetId, connection);
+        return connection;
     }, []);
 
-    const attachLocalTracks = useCallback((pc) => {
+    const attachLocalTracks = useCallback((connection) => {
         const stream = localStreamRef.current;
         if (!stream) return;
-        const currentTrackIds = pc.getSenders().map(s => s.track && s.track.id).filter(Boolean);
+
+        const activeTrackIds = connection.getSenders().map(sender => sender.track && sender.track.id).filter(Boolean);
         stream.getAudioTracks().forEach(track => {
-            if (!currentTrackIds.includes(track.id)) {
-                pc.addTrack(track, stream);
+            if (!activeTrackIds.includes(track.id)) {
+                connection.addTrack(track, stream);
             }
         });
     }, []);
@@ -132,70 +249,147 @@ export function SocketProvider({ children }) {
     const createOfferToPeer = useCallback(async (targetId) => {
         const socket = socketRef.current;
         if (!socket || !roomIdRef.current || targetId === socket.id) return;
-        const pc = ensurePeerConnection(targetId);
-        attachLocalTracks(pc);
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        socket.emit('voice-offer', { targetId, offer: pc.localDescription });
+
+        const connection = ensurePeerConnection(targetId);
+        attachLocalTracks(connection);
+        const offer = await connection.createOffer();
+        await connection.setLocalDescription(offer);
+        socket.emit('voice-offer', { targetId, offer: connection.localDescription });
     }, [attachLocalTracks, ensurePeerConnection]);
 
-    // --- Init socket ---
+    const resetGameState = useCallback(() => {
+        setGameActive(false);
+        setMyRole(null);
+        setHand([]);
+        setBoard({});
+        setCurrentTurnId(null);
+        setRound(1);
+        setScores({});
+        setLogs([]);
+        setChatMessages([]);
+        setRoundResult(null);
+        setGameOverResult(null);
+        setMapResult(null);
+    }, []);
+
+    const resetRoomState = useCallback(({ clearSession = false } = {}) => {
+        stopLocalMicTracks();
+        closeAllVoiceConnections();
+        setSpeakerEnabled(false);
+        setMicEnabled(false);
+        setVoiceError('');
+        setRoomId(null);
+        setPlayerKey(null);
+        setIsHost(false);
+        setPlayers([]);
+        setPlayerCount(0);
+        setMatchQueue({ inQueue: false, count: 0 });
+        resetGameState();
+        if (clearSession) {
+            clearStoredRoomSession();
+        }
+    }, [closeAllVoiceConnections, resetGameState, stopLocalMicTracks]);
+
+    const restoreProfileFromStorage = useCallback(() => {
+        const storedUsername = readStoredUsername();
+        const nextUser = createLocalUser(storedUsername);
+        setUser(nextUser);
+        setIsAuthenticated(Boolean(nextUser));
+        return nextUser;
+    }, []);
+
+    const handleInvalidStoredSession = useCallback((message) => {
+        resetRoomState({ clearSession: true });
+        restoreProfileFromStorage();
+        showError(message);
+    }, [resetRoomState, restoreProfileFromStorage, showError]);
+
     useEffect(() => {
         const socket = io({ transports: ['websocket', 'polling'] });
         socketRef.current = socket;
 
-        // Try auto-auth with stored token
         socket.on('connect', () => {
-            const token = localStorage.getItem('saboteur_token');
-            if (token) socket.emit('authenticate', token);
+            const storedUser = restoreProfileFromStorage();
+            const storedSession = readStoredRoomSession();
+
+            if (storedSession.playerKey) {
+                setPlayerKey(storedSession.playerKey);
+            }
+            if (storedSession.roomId && storedSession.playerKey) {
+                socket.emit('reconnectPlayer', {
+                    roomId: storedSession.roomId,
+                    playerKey: storedSession.playerKey
+                });
+            } else if (storedUser) {
+                setIsAuthenticated(true);
+            }
         });
 
-        socket.on('authenticated', (data) => {
-            if (data.success) {
-                setUser(data.user);
-                setIsAuthenticated(true);
-                // Try reconnect to room
-                const savedRoom = localStorage.getItem('saboteur_roomId');
-                const savedKey = localStorage.getItem('saboteur_playerKey');
-                if (savedRoom && savedKey) {
-                    socket.emit('reconnectPlayer', { roomId: savedRoom, playerKey: savedKey });
+        socket.on('roomJoined', (data) => {
+            setRoomId(data.roomId);
+            setPlayerKey(data.playerKey);
+            setIsHost(Boolean(data.isHost));
+            setGameActive(Boolean(data.status && data.status !== 'waiting'));
+            setRoundResult(null);
+            setGameOverResult(null);
+            setMapResult(null);
+            saveStoredRoomSession({
+                roomId: data.roomId,
+                playerKey: data.playerKey,
+                lastJoinMode: data.joinMode || 'join'
+            });
+        });
+
+        socket.on('roomPlayers', (data) => {
+            const nextPlayers = data.players || [];
+            setPlayers(nextPlayers);
+            setPlayerCount(data.playerCount ?? nextPlayers.length);
+            if (data.currentTurnId !== undefined) {
+                setCurrentTurnId(data.currentTurnId);
+            }
+
+            const currentPlayerKey = playerKeyRef.current;
+            if (currentPlayerKey) {
+                const me = nextPlayers.find(player => player.playerKey === currentPlayerKey);
+                if (me) {
+                    setIsHost(Boolean(me.isHost));
                 }
             }
         });
 
-        // Room events
-        socket.on('roomJoined', (data) => {
-            setRoomId(data.roomId);
-            setIsHost(data.isHost);
-            setPlayerKey(data.playerKey);
-            localStorage.setItem('saboteur_roomId', data.roomId);
-            localStorage.setItem('saboteur_playerKey', data.playerKey);
+        socket.on('playerJoined', (data) => {
+            if (typeof data?.playerCount === 'number') {
+                setPlayerCount(data.playerCount);
+            }
         });
 
-        socket.on('roomPlayers', (data) => {
-            setPlayers(data.players || []);
+        socket.on('playerLeft', (data) => {
+            if (typeof data?.playerCount === 'number') {
+                setPlayerCount(data.playerCount);
+            }
         });
 
-        socket.on('playerJoined', (data) => setPlayerCount(data.playerCount));
-        socket.on('playerLeft', (data) => setPlayerCount(data.playerCount));
+        socket.on('matchQueueStatus', (data) => {
+            setMatchQueue(data);
+        });
 
-        // Matchmaking
-        socket.on('matchQueueStatus', (data) => setMatchQueue(data));
         socket.on('matchFound', (data) => {
             setMatchQueue({ inQueue: false, count: 0 });
             setRoomId(data.roomId);
-            setIsHost(data.isHost);
             setPlayerKey(data.playerKey);
-            localStorage.setItem('saboteur_roomId', data.roomId);
-            localStorage.setItem('saboteur_playerKey', data.playerKey);
+            setIsHost(Boolean(data.isHost));
+            saveStoredRoomSession({
+                roomId: data.roomId,
+                playerKey: data.playerKey,
+                lastJoinMode: data.joinMode || 'match'
+            });
         });
 
-        // Game lifecycle
         socket.on('gameStarted', (data) => {
             setGameActive(true);
-            setMyRole(data.yourRole);
-            setHand(data.yourHand);
-            setBoard(data.board);
+            setMyRole(data.yourRole || null);
+            setHand(data.yourHand || []);
+            setBoard(data.board || {});
             setRound(data.round || 1);
             setScores(data.scores || {});
             setRoundResult(null);
@@ -205,29 +399,56 @@ export function SocketProvider({ children }) {
         });
 
         socket.on('reconnectedState', (data) => {
+            const recoveredName = data.yourName || readStoredUsername();
+            const recoveredUser = createLocalUser(recoveredName);
+            if (recoveredUser) {
+                setUser(recoveredUser);
+                setIsAuthenticated(true);
+                saveStoredUsername(recoveredName);
+            }
+
             setRoomId(data.roomId);
-            setGameActive(true);
-            setMyRole(data.yourRole);
-            setHand(data.yourHand);
-            setBoard(data.board);
-            setRound(data.round);
+            setPlayerKey(data.playerKey || readStoredRoomSession().playerKey || null);
+            setIsHost(Boolean(data.isHost));
+            setPlayers(data.players || []);
+            setPlayerCount(data.players?.length || 0);
+            setGameActive(Boolean(data.gameActive));
+            setMyRole(data.yourRole || null);
+            setHand(data.yourHand || []);
+            setBoard(data.board || {});
+            setRound(data.round || 1);
             setScores(data.scores || {});
-            if (data.currentTurnId) setCurrentTurnId(data.currentTurnId);
-            setLogs(prev => [...prev, { time: now(), message: '重连成功！' }]);
+            setCurrentTurnId(data.currentTurnId || null);
+            setRoundResult(null);
+            setGameOverResult(data.gameOverResult || null);
+            setMapResult(null);
+            setLogs([{ time: now(), message: '已为你恢复到之前的房间。' }]);
+
+            saveStoredRoomSession({
+                roomId: data.roomId,
+                playerKey: data.playerKey || readStoredRoomSession().playerKey,
+                lastJoinMode: readStoredRoomSession().lastJoinMode || 'join'
+            });
         });
 
-        socket.on('boardUpdated', (newBoard) => setBoard(newBoard));
-        socket.on('handUpdated', (data) => setHand(data.yourHand));
+        socket.on('boardUpdated', (nextBoard) => {
+            setBoard(nextBoard);
+        });
+
+        socket.on('handUpdated', (data) => {
+            setHand(data.yourHand || []);
+        });
+
         socket.on('turnUpdated', (data) => {
-            setCurrentTurnId(data.currentTurnId);
+            setCurrentTurnId(data.currentTurnId || null);
         });
 
-        socket.on('gameMsg', (msg) => {
-            setLogs(prev => [...prev, { time: now(), message: msg }]);
+        socket.on('gameMsg', (message) => {
+            setLogs(prevLogs => [...prevLogs, { time: now(), message }]);
         });
 
         socket.on('actionEffect', () => {
-            // Could trigger SFX here in the future
+            // Reserved for future sound or haptic effects.
         });
 
         socket.on('mapResult', (data) => {
@@ -237,77 +458,94 @@ export function SocketProvider({ children }) {
 
         socket.on('roundOver', (data) => {
             setRoundResult(data);
-            setRound(data.round + 1);
+            setRound((data.round || 0) + 1);
             setScores(data.scores || {});
-            setLogs(prev => [...prev, { time: now(), message: `🚩 ${data.msg}` }]);
+            setLogs(prevLogs => [...prevLogs, { time: now(), message: `🚩 ${data.msg}` }]);
         });
 
         socket.on('finalGameOver', (data) => {
+            setGameActive(true);
             setGameOverResult(data);
             setScores(data.scores || {});
-            setLogs(prev => [...prev, { time: now(), message: `🏁 ${data.msg}` }]);
+            setLogs(prevLogs => [...prevLogs, { time: now(), message: `🏁 ${data.msg}` }]);
         });
 
-        // Voice signaling
+        socket.on('roomExpired', (data) => {
+            handleInvalidStoredSession(data?.message || '之前的房间已失效，请重新进入。');
+        });
+
+        socket.on('sessionInvalid', (data) => {
+            handleInvalidStoredSession(data?.message || '之前的玩家身份已失效，请重新进入房间。');
+        });
+
         socket.on('voice-enabled', async ({ from }) => {
             if (!from || from === socket.id) return;
             if (!speakerEnabledRef.current && !micEnabledRef.current) return;
+
             try {
                 await createOfferToPeer(from);
-            } catch (err) {
-                setVoiceError(`语音连接失败: ${err.message}`);
+            } catch (error) {
+                setVoiceError(`语音连接失败: ${error.message}`);
             }
         });
 
         socket.on('voice-offer', async ({ from, offer }) => {
             try {
-                const pc = ensurePeerConnection(from);
-                attachLocalTracks(pc);
-                await pc.setRemoteDescription(new RTCSessionDescription(offer));
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-                socket.emit('voice-answer', { targetId: from, answer: pc.localDescription });
-            } catch (err) {
-                setVoiceError(`接收语音失败: ${err.message}`);
+                const connection = ensurePeerConnection(from);
+                attachLocalTracks(connection);
+                await connection.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await connection.createAnswer();
+                await connection.setLocalDescription(answer);
+                socket.emit('voice-answer', { targetId: from, answer: connection.localDescription });
+            } catch (error) {
+                setVoiceError(`接收语音失败: ${error.message}`);
             }
         });
 
         socket.on('voice-answer', async ({ from, answer }) => {
             try {
-                const pc = ensurePeerConnection(from);
-                await pc.setRemoteDescription(new RTCSessionDescription(answer));
-            } catch (err) {
-                setVoiceError(`语音应答失败: ${err.message}`);
+                const connection = ensurePeerConnection(from);
+                await connection.setRemoteDescription(new RTCSessionDescription(answer));
+            } catch (error) {
+                setVoiceError(`语音应答失败: ${error.message}`);
             }
         });
 
         socket.on('voice-ice-candidate', async ({ from, candidate }) => {
             try {
-                const pc = ensurePeerConnection(from);
-                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                const connection = ensurePeerConnection(from);
+                await connection.addIceCandidate(new RTCIceCandidate(candidate));
             } catch {
                 // ignore transient ICE errors
             }
         });
 
-        // Chat
         socket.on('chatMessage', (data) => {
-            setChatMessages(prev => [...prev, data]);
+            setChatMessages(prevMessages => [...prevMessages, data]);
         });
 
-        // Errors
-        socket.on('errorMsg', (msg) => {
-            setErrorMsg(msg);
-            setTimeout(() => setErrorMsg(null), 4000);
+        socket.on('errorMsg', (message) => {
+            showError(message);
         });
 
         return () => {
             stopLocalMicTracks();
             closeAllVoiceConnections();
+            if (errorTimerRef.current) {
+                clearTimeout(errorTimerRef.current);
+                errorTimerRef.current = null;
+            }
             socket.disconnect();
         };
-    }, [attachLocalTracks, closeAllVoiceConnections, createOfferToPeer, ensurePeerConnection, stopLocalMicTracks]);
+    }, [attachLocalTracks, closeAllVoiceConnections, createOfferToPeer, ensurePeerConnection, handleInvalidStoredSession, restoreProfileFromStorage, showError, stopLocalMicTracks]);
 
+    useEffect(() => {
+        roomIdRef.current = roomId;
+    }, [roomId]);
+
+    useEffect(() => {
+        playerKeyRef.current = playerKey;
+    }, [playerKey]);
 
     useEffect(() => {
         speakerEnabledRef.current = speakerEnabled;
@@ -318,106 +556,88 @@ export function SocketProvider({ children }) {
     }, [micEnabled]);
 
     useEffect(() => {
-        roomIdRef.current = roomId;
-    }, [roomId]);
-
-    useEffect(() => {
         setAudioSinkState(speakerEnabled);
     }, [speakerEnabled, setAudioSinkState]);
 
-    // Ensure mic-open players connect to newcomers
     useEffect(() => {
         if (!micEnabled || !roomId || !socketRef.current?.id) return;
-        const me = socketRef.current.id;
+
+        const mySocketId = socketRef.current.id;
         players
-            .map(p => p.id)
-            .filter(id => id && id !== me)
-            .forEach(id => {
-                if (!peerConnectionsRef.current.has(id)) {
-                    createOfferToPeer(id).catch(() => {
+            .map(player => player.id)
+            .filter(playerId => playerId && playerId !== mySocketId)
+            .forEach(playerId => {
+                if (!peerConnectionsRef.current.has(playerId)) {
+                    createOfferToPeer(playerId).catch(() => {
                         // ignore one-off failures
                     });
                 }
             });
     }, [players, micEnabled, roomId, createOfferToPeer]);
 
-    // --- Action helpers ---
-
     const quickLogin = useCallback((nickname) => {
-        const cleanName = String(nickname || '').trim();
-        if (!cleanName) throw new Error('请输入用户名');
-        const guestUser = { id: `guest_${Date.now()}`, username: cleanName, nickname: cleanName };
-        setUser(guestUser);
+        const profile = createLocalUser(nickname);
+        if (!profile) {
+            throw new Error('请输入用户名');
+        }
+
+        saveStoredUsername(profile.nickname);
+        setUser(profile);
         setIsAuthenticated(true);
-        localStorage.setItem('saboteur_user', JSON.stringify(guestUser));
-        localStorage.removeItem('saboteur_token');
-        return guestUser;
-    }, []);
-
-    const login = useCallback(async (username, password) => {
-        const res = await fetch('/api/login', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password }),
-        });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        localStorage.setItem('saboteur_token', data.token);
-        localStorage.setItem('saboteur_user', JSON.stringify(data.user));
-        socketRef.current?.emit('authenticate', data.token);
-        return data;
-    }, []);
-
-    const register = useCallback(async (username, password, nickname) => {
-        const res = await fetch('/api/register', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, nickname }),
-        });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        return data;
+        return profile;
     }, []);
 
     const createRoom = useCallback(() => {
-        socketRef.current?.emit('createRoom', { name: user?.nickname });
-    }, [user]);
+        const activeName = user?.nickname || readStoredUsername();
+        if (!activeName) {
+            showError('请输入用户名');
+            return;
+        }
+        socketRef.current?.emit('createRoom', { name: activeName });
+    }, [showError, user]);
 
     const joinRoom = useCallback((id) => {
-        socketRef.current?.emit('joinRoom', { roomId: id, name: user?.nickname });
-    }, [user]);
+        const activeName = user?.nickname || readStoredUsername();
+        if (!activeName) {
+            showError('请输入用户名');
+            return;
+        }
+        socketRef.current?.emit('joinRoom', { roomId: String(id || '').trim(), name: activeName });
+    }, [showError, user]);
 
     const leaveRoom = useCallback(() => {
-        const storedRoom = roomId || localStorage.getItem('saboteur_roomId');
-        if (storedRoom) {
-            socketRef.current?.emit('leaveRoom', { roomId: storedRoom });
+        const storedSession = readStoredRoomSession();
+        const activeRoomId = roomId || storedSession.roomId;
+        const activePlayerKey = playerKey || storedSession.playerKey;
+
+        if (activeRoomId) {
+            socketRef.current?.emit('leaveRoom', { roomId: activeRoomId, playerKey: activePlayerKey });
         }
-        stopLocalMicTracks();
-        closeAllVoiceConnections();
-        setSpeakerEnabled(false);
-        setMicEnabled(false);
-        setVoiceError('');
-        setRoomId(null);
-        setPlayers([]);
-        setPlayerCount(0);
-        setIsHost(false);
-        setPlayerKey(null);
-        setGameActive(false);
-        setRoundResult(null);
-        setGameOverResult(null);
-        setMapResult(null);
-        localStorage.removeItem('saboteur_roomId');
-        localStorage.removeItem('saboteur_playerKey');
-    }, [roomId, stopLocalMicTracks, closeAllVoiceConnections]);
+        resetRoomState({ clearSession: true });
+    }, [playerKey, resetRoomState, roomId]);
 
     const startGame = useCallback(() => {
-        if (roomId) socketRef.current?.emit('requestStartGame', { roomId });
+        if (roomId) {
+            socketRef.current?.emit('requestStartGame', { roomId });
+        }
     }, [roomId]);
+
     const requestRematch = useCallback(() => {
-        if (roomId) socketRef.current?.emit('requestRematch', { roomId });
+        if (roomId) {
+            socketRef.current?.emit('requestRematch', { roomId });
+        }
     }, [roomId]);
 
     const joinMatchQueue = useCallback(() => {
-        socketRef.current?.emit('joinMatchQueue');
-    }, []);
+        const activeName = user?.nickname || readStoredUsername();
+        if (!activeName) {
+            showError('请输入用户名');
+            return;
+        }
+
+        resetRoomState({ clearSession: true });
+        socketRef.current?.emit('joinMatchQueue', { username: activeName });
+    }, [resetRoomState, showError, user]);
 
     const leaveMatchQueue = useCallback(() => {
         socketRef.current?.emit('leaveMatchQueue');
@@ -439,7 +659,7 @@ export function SocketProvider({ children }) {
     }, [roomId]);
 
     const toggleSpeaker = useCallback(() => {
-        setSpeakerEnabled(prev => !prev);
+        setSpeakerEnabled(prevEnabled => !prevEnabled);
     }, []);
 
     const toggleMic = useCallback(async () => {
@@ -460,64 +680,79 @@ export function SocketProvider({ children }) {
             setMicEnabled(true);
             setVoiceError('');
 
-            const myId = socketRef.current?.id;
-            const others = players.map(p => p.id).filter(id => id && id !== myId);
-            for (const targetId of others) {
+            const mySocketId = socketRef.current?.id;
+            const otherPlayerIds = players.map(player => player.id).filter(playerId => playerId && playerId !== mySocketId);
+            for (const targetId of otherPlayerIds) {
                 await createOfferToPeer(targetId);
             }
 
             socketRef.current?.emit('voice-enabled', { roomId });
-        } catch (err) {
-            setVoiceError(`无法开启麦克风: ${err.message}`);
+        } catch (error) {
+            setVoiceError(`无法开启麦克风: ${error.message}`);
         }
-    }, [roomId, micEnabled, players, stopLocalMicTracks, createOfferToPeer]);
+    }, [createOfferToPeer, micEnabled, players, roomId, stopLocalMicTracks]);
 
     const logout = useCallback(() => {
-        stopLocalMicTracks();
-        closeAllVoiceConnections();
-        localStorage.removeItem('saboteur_token');
-        localStorage.removeItem('saboteur_user');
-        localStorage.removeItem('saboteur_roomId');
-        localStorage.removeItem('saboteur_playerKey');
-        setIsAuthenticated(false);
+        resetRoomState({ clearSession: true });
+        clearStoredProfile();
         setUser(null);
-        setRoomId(null);
-        setGameActive(false);
-        window.location.reload();
-    }, [stopLocalMicTracks, closeAllVoiceConnections]);
+        setIsAuthenticated(false);
+    }, [resetRoomState]);
 
-    const clearRoundResult = useCallback(() => setRoundResult(null), []);
-    const clearGameOver = useCallback(() => {
-        setGameOverResult(null);
-        setGameActive(false);
-        setRoomId(null);
-        localStorage.removeItem('saboteur_roomId');
-        localStorage.removeItem('saboteur_playerKey');
+    const clearRoundResult = useCallback(() => {
+        setRoundResult(null);
     }, []);
+
+    const clearGameOver = useCallback(() => {
+        leaveRoom();
+    }, [leaveRoom]);
 
     const socketId = socketRef.current?.id;
 
     const value = {
-        socket: socketRef.current, socketId,
-        // Auth
-        user, isAuthenticated, quickLogin, login, register, logout,
-        // Room
-        roomId, isHost, playerKey, players, playerCount, createRoom, joinRoom, leaveRoom, startGame, requestRematch,
-        // Match
-        matchQueue, joinMatchQueue, leaveMatchQueue,
-        // Game
-        gameActive, myRole, hand, board, currentTurnId, round, scores,
-        playCard, discardCard,
-        // Voice
-        speakerEnabled, micEnabled, voiceError, toggleSpeaker, toggleMic,
-        // UI
-        logs, chatMessages, sendChat, errorMsg, roundResult, gameOverResult, mapResult,
-        clearRoundResult, clearGameOver,
+        socket: socketRef.current,
+        socketId,
+        user,
+        isAuthenticated,
+        quickLogin,
+        logout,
+        roomId,
+        isHost,
+        playerKey,
+        players,
+        playerCount,
+        createRoom,
+        joinRoom,
+        leaveRoom,
+        startGame,
+        requestRematch,
+        matchQueue,
+        joinMatchQueue,
+        leaveMatchQueue,
+        gameActive,
+        myRole,
+        hand,
+        board,
+        currentTurnId,
+        round,
+        scores,
+        playCard,
+        discardCard,
+        speakerEnabled,
+        micEnabled,
+        voiceError,
+        toggleSpeaker,
+        toggleMic,
+        logs,
+        chatMessages,
+        sendChat,
+        errorMsg,
+        roundResult,
+        gameOverResult,
+        mapResult,
+        clearRoundResult,
+        clearGameOver
     };
 
     return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;
-}
-
-function now() {
-    return new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }

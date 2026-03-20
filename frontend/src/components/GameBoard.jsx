@@ -27,6 +27,9 @@ const PathSymbol = ({ name, rotated }) => {
 const BoardCard = ({ data }) => {
     if (!data) return null;
 
+    const rotation = Number(data.rotation) || 0;
+    const isRotated = Boolean(data.rotated) || (Math.abs(rotation) % 360 === 180);
+
     if (data.type === 'start') {
         const startImg = '/assets/card_start_ladder_1772908453714.png';
         return (
@@ -64,8 +67,13 @@ const BoardCard = ({ data }) => {
         <div className="w-full h-full rounded-md border-2 border-amber-800/80 shadow-[0_2px_6px_rgba(0,0,0,0.6)] flex items-center justify-center relative overflow-hidden animate-card-stamp">
             <div className="absolute inset-0 bg-cover bg-center opacity-80" style={{ backgroundImage: `url(${dirtImg})` }} />
             <div className="absolute inset-0 bg-black/30 pointer-events-none" />
-            <span className="relative z-10 text-amber-400 font-bold" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}>
-                <PathSymbol name={data.name} rotated={data.rotated} />
+            <span
+                className="relative z-10 text-amber-400 font-bold"
+                style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}
+                data-board-rotated={isRotated ? 'true' : 'false'}
+                data-board-rotation={String(rotation)}
+            >
+                <PathSymbol name={data.name} rotated={isRotated} />
             </span>
         </div>
     );
