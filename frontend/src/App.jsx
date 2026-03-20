@@ -3,6 +3,7 @@ import { SocketProvider, useSocket } from './contexts/SocketContext';
 import AuthPage from './pages/AuthPage';
 import LobbyPage from './pages/LobbyPage';
 import GamePage from './pages/GamePage';
+import HandCardPreviewPage from './pages/HandCardPreviewPage';
 
 function AppContent() {
     const { isAuthenticated, gameActive, errorMsg } = useSocket();
@@ -24,6 +25,14 @@ function AppContent() {
 }
 
 function App() {
+    const preview = typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('preview')
+        : null;
+
+    if (preview === 'hand-cards') {
+        return <HandCardPreviewPage />;
+    }
+
     return (
         <SocketProvider>
             <AppContent />

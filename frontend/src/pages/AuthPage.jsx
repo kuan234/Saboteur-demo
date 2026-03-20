@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useSocket } from '../contexts/SocketContext';
 
 export default function AuthPage() {
@@ -33,7 +33,7 @@ export default function AuthPage() {
                 <h1 className="text-3xl md:text-4xl text-center text-amber-500 font-bold mb-2 tracking-wider font-medieval" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
                     ⛏️ 矮人矿坑
                 </h1>
-                <p className="text-center text-stone-400 text-sm mb-6">移动端优先体验 · 输入昵称即可开始</p>
+                <p className="text-center text-stone-400 text-sm mb-6">移动端优先体验 · 只需输入昵称即可进入，误关后会自动尝试恢复房间</p>
 
                 <form onSubmit={handleSubmit} className="flex flex-col space-y-4">
                     <input
