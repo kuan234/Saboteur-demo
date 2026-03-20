@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
     getCardArt,
-    getCardHint,
+    getCompactCardName,
+    getDisplayedDirs,
+    getDisplayedDirsKey,
     getDirsKey,
     getTheme,
     inferCardKind,
 } from './handCardArt';
+import RouteMarker from './RouteMarker';
 
 const calculateCardTransform = (index, totalCards) => {
     if (totalCards <= 1) return { rotation: 0 };
@@ -35,7 +38,9 @@ const HandCard = ({
     const cardArt = getCardArt(card);
     const isPath = card.type === 'path';
     const cardId = card.id || `card-${index}`;
-    const glyph = card.name || '🛤️';
+    const compactName = getCompactCardName(card);
+    const displayedDirs = getDisplayedDirs(card, isRotated);
+    const displayedDirsKey = getDisplayedDirsKey(card, isRotated);
     const [rotationFlash, setRotationFlash] = useState(false);
     const didMountRef = useRef(false);
 
@@ -116,12 +121,12 @@ const HandCard = ({
 
                 {isPath && isRotated && (
                     <div className="absolute right-1.5 top-1.5 z-20 rounded-full border border-amber-300/60 bg-amber-600/90 px-1.5 py-0.5 text-[9px] font-black tracking-wide text-white shadow-lg">
-                        已旋转
+                        旋转
                     </div>
                 )}
 
                 {!isMobile && (
-                    <div className="relative z-20 flex justify-between px-2 pb-1 pt-2">
+                    <div className="absolute left-1.5 top-1.5 z-30">
                         <button
                             className="flex h-7 w-7 items-center justify-center rounded-full border border-red-500/80 bg-red-800/85 text-white transition-all active:bg-red-600"
                             onMouseDown={(event) => event.stopPropagation()}
@@ -136,20 +141,23 @@ const HandCard = ({
                     </div>
                 )}
 
-                <div className="relative z-20 mt-1 px-2">
-                    <h4 className="text-center text-xs font-bold leading-tight text-white md:text-sm" style={{ textShadow: '1px 1px 3px rgba(0,0,0,0.9)' }}>
+                <div className={`absolute z-20 rounded-full border border-white/10 bg-black/70 px-2 py-1 shadow-lg backdrop-blur-sm ${isMobile ? 'left-2 top-2 max-w-[70%]' : 'left-10 top-1.5 max-w-[55%]'}`}>
+                    <div className="truncate text-[9px] font-bold tracking-[0.08em] text-stone-100 md:text-[10px]">
+                        {compactName}
+                    </div>
+                    <div className="truncate text-[8px] text-stone-300">
                         {card.name}
-                    </h4>
+                    </div>
                 </div>
 
-                <div className="relative z-10 mx-1.5 mb-1 mt-1 flex-1 overflow-hidden rounded-lg border border-white/10 bg-stone-900/70">
+                <div className="absolute inset-[0.32rem] z-10 overflow-hidden rounded-[0.9rem] border border-white/10 bg-stone-900/70">
                     <img
                         src={cardArt.src}
                         alt={String(card.name || 'card')}
                         className="h-full w-full select-none object-cover pointer-events-none"
                         draggable={false}
                         style={{
-                            transform: `rotate(${cardImageRotation}deg) scale(${cardArt.showLargeGlyph ? 1.06 : 1.14})`,
+                            transform: `rotate(${cardImageRotation}deg) scale(${cardArt.showLargeGlyph ? 1.02 : 1.1})`,
                             transition: 'transform 0.36s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.22s ease',
                             filter: rotationFlash ? 'brightness(1.2) drop-shadow(0 0 10px rgba(251,191,36,0.45))' : 'none',
                         }}
@@ -157,34 +165,47 @@ const HandCard = ({
 
                     {isPath && cardArt.showLargeGlyph && (
                         <div className="absolute inset-0 flex items-center justify-center">
-                            <span
-                                className="text-[3.2rem] font-black leading-none text-amber-300 sm:text-[3.6rem] md:text-5xl"
-                                style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}
-                            >
-                                {glyph}
-                            </span>
+                            <RouteMarker
+                                dirs={displayedDirs}
+                                deadEnd={cardKind === 'dead-end'}
+                                size={isMobile ? 54 : 68}
+                                className="bg-black/55 backdrop-blur-sm"
+                            />
                         </div>
                     )}
 
-                    {isPath && !cardArt.showLargeGlyph && (
-                        <div className="absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-1 text-sm font-black text-amber-200 shadow-lg">
-                            {glyph}
-                        </div>
-                    )}
-                </div>
+                    <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/88 via-black/48 to-transparent px-2 pb-2 pt-8">
+                        <div className="flex items-end justify-between gap-2">
+                            {isPath ? (
+                                <div className="rounded-2xl border border-white/10 bg-black/70 px-1.5 py-1 shadow-lg backdrop-blur-sm">
+                                    <div className="flex items-center gap-1.5">
+                                        <RouteMarker
+                                            dirs={displayedDirs}
+                                            deadEnd={cardKind === 'dead-end'}
+                                            size={isMobile ? 22 : 24}
+                                        />
+                                        <div className="min-w-0">
+                                            <div className="truncate text-[8px] font-bold tracking-[0.12em] text-amber-100 md:text-[9px]">
+                                                真实路线
+                                            </div>
+                                            <div className="font-mono text-[8px] text-stone-300 md:text-[9px]">
+                                                {displayedDirsKey || '----'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="rounded-full border border-white/10 bg-black/70 px-2 py-1 text-[8px] font-bold tracking-[0.12em] text-stone-100 shadow-lg backdrop-blur-sm md:text-[9px]">
+                                    {card.name}
+                                </div>
+                            )}
 
-                <div className="z-20 w-full bg-black/45 px-2 pb-2">
-                    <div className={`${theme.labelBg} mx-1 mb-1 mt-1 rounded py-0.5 text-center`}>
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-white/80">{theme.label}</span>
+                            <div className={`${theme.labelBg} rounded-full border border-white/10 px-2 py-1 text-[8px] font-bold tracking-[0.14em] text-white/90 shadow-lg md:text-[9px]`}>
+                                {theme.label}
+                            </div>
+                        </div>
                     </div>
-                    {isPath && (
-                        <div className="mx-1 mb-1 rounded border border-amber-500/30 bg-amber-800/80 py-0.5 text-center">
-                            <span className="text-[8px] font-bold leading-none tracking-widest text-amber-200">双击或按按钮旋转</span>
-                        </div>
-                    )}
-                    <p className="line-clamp-2 px-1 text-center text-[9px] leading-tight text-stone-200">
-                        {getCardHint(card, cardKind)}
-                    </p>
+
                 </div>
             </div>
         </div>

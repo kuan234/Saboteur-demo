@@ -47,7 +47,7 @@ export default function GamePage() {
         logs, chatMessages, sendChat, myRole,
         mapResult, roundResult, gameOverResult, clearRoundResult, clearGameOver,
         speakerEnabled, micEnabled, voiceError, toggleSpeaker, toggleMic,
-        isHost, requestRematch, round
+        isHost, requestRematch, round, deckCount
     } = useSocket();
 
     const [draggingCard, setDraggingCard] = useState(null);
@@ -296,6 +296,11 @@ export default function GamePage() {
                 >
                     {micLabel}
                 </button>
+            </div>
+
+            <div className="fixed right-3 top-16 z-[79] rounded-xl border border-amber-500/40 bg-stone-950/90 px-3 py-2 text-[11px] text-amber-100 shadow-lg md:right-4 md:top-16 md:text-xs" data-testid="deck-count-badge">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-amber-300/70">Deck</div>
+                <div className="mt-0.5 font-bold">剩余可抽 {deckCount}</div>
             </div>
 
             <div className="lg:hidden fixed right-3 top-3 z-[82]">

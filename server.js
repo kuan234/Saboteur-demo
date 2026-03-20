@@ -213,6 +213,146 @@ const deadEndTemplates = [
     { type: 'path', subType: 'dead-end', name: '堵路-上下左右', blocked: '上下左右', dirs: [0, 0, 0, 0] }
 ];
 
+const BOARD_MIN_X = 0;
+const BOARD_MAX_X = 8;
+const BOARD_MIN_Y = -2;
+const BOARD_MAX_Y = 2;
+const START_COORD = { x: 0, y: 0 };
+const GOAL_COORDS = [
+    { x: 8, y: -2 },
+    { x: 8, y: 0 },
+    { x: 8, y: 2 }
+];
+const CARD_DIRECTIONS = [
+    { dx: 0, dy: -1, from: 0, to: 2 },
+    { dx: 1, dy: 0, from: 1, to: 3 },
+    { dx: 0, dy: 1, from: 2, to: 0 },
+    { dx: -1, dy: 0, from: 3, to: 1 }
+];
+
+function coordKey(x, y) {
+    return `${x},${y}`;
+}
+
+function parseCoord(key) {
+    const [x, y] = String(key || '').split(',').map(Number);
+    return { x, y };
+}
+
+function hasPathDirs(card) {
+    return Array.isArray(card?.dirs) && card.dirs.length === 4;
+}
+
+function isWithinBoardBounds(x, y) {
+    return Number.isInteger(x)
+        && Number.isInteger(y)
+        && x >= BOARD_MIN_X
+        && x <= BOARD_MAX_X
+        && y >= BOARD_MIN_Y
+        && y <= BOARD_MAX_Y;
+}
+
+function getDeckCount(room) {
+    return Array.isArray(room?.deck) ? room.deck.length : 0;
+}
+
+function emitDeckCount(roomId) {
+    const room = rooms[roomId];
+    if (!room) return;
+
+    io.to(roomId).emit('deckCountUpdated', { deckCount: getDeckCount(room) });
+}
+
+function getReachablePathCoords(board) {
+    const visited = new Set();
+    const startKey = coordKey(START_COORD.x, START_COORD.y);
+    const startCard = board?.[startKey];
+
+    if (!hasPathDirs(startCard)) {
+        return visited;
+    }
+
+    const queue = [startKey];
+    visited.add(startKey);
+
+    while (queue.length > 0) {
+        const currentKey = queue.shift();
+        const { x, y } = parseCoord(currentKey);
+        const currentCard = board[currentKey];
+
+        if (!hasPathDirs(currentCard)) continue;
+
+        CARD_DIRECTIONS.forEach(({ dx, dy, from, to }) => {
+            if (currentCard.dirs[from] !== 1) return;
+
+            const nextKey = coordKey(x + dx, y + dy);
+            const nextCard = board[nextKey];
+            if (!hasPathDirs(nextCard) || nextCard.dirs[to] !== 1 || visited.has(nextKey)) {
+                return;
+            }
+
+            visited.add(nextKey);
+            queue.push(nextKey);
+        });
+    }
+
+    return visited;
+}
+
+function evaluatePathPlacement(board, targetX, targetY, targetDirs) {
+    if (!isWithinBoardBounds(targetX, targetY)) {
+        return { ok: false, reason: 'out-of-bounds' };
+    }
+
+    const targetKey = coordKey(targetX, targetY);
+    if (board[targetKey]) {
+        return { ok: false, reason: 'occupied' };
+    }
+
+    if (!Array.isArray(targetDirs) || targetDirs.length !== 4) {
+        return { ok: false, reason: 'invalid-card' };
+    }
+
+    const reachable = getReachablePathCoords(board);
+    let hasNeighbor = false;
+    let validMatch = true;
+    let connectToReachablePath = false;
+
+    CARD_DIRECTIONS.forEach(({ dx, dy, from, to }) => {
+        const neighborKey = coordKey(targetX + dx, targetY + dy);
+        const neighbor = board[neighborKey];
+
+        if (!hasPathDirs(neighbor)) {
+            return;
+        }
+
+        hasNeighbor = true;
+
+        if (neighbor.dirs[to] !== targetDirs[from]) {
+            validMatch = false;
+            return;
+        }
+
+        if (neighbor.dirs[to] === 1 && targetDirs[from] === 1 && reachable.has(neighborKey)) {
+            connectToReachablePath = true;
+        }
+    });
+
+    if (!hasNeighbor) {
+        return { ok: false, reason: 'no-neighbor' };
+    }
+
+    if (!validMatch) {
+        return { ok: false, reason: 'mismatch' };
+    }
+
+    if (!connectToReachablePath) {
+        return { ok: false, reason: 'not-reachable-from-start' };
+    }
+
+    return { ok: true };
+}
+
 function getOnlinePlayerCount(room) {
     if (!room) return 0;
     return room.players.filter(player => !player.disconnected).length;
@@ -253,6 +393,7 @@ function buildRoomState(roomId, player) {
         board: room.board || {},
         round: room.round || 1,
         scores: room.scores || {},
+        deckCount: getDeckCount(room),
         currentTurnId: getCurrentTurnId(room),
         players: serializeRoomPlayers(room),
         gameOverResult: room.lastGameOverResult || null
@@ -353,6 +494,7 @@ function tryCreateMatchRoom() {
                 roomId,
                 isHost: room.hostId === player.playerKey,
                 playerKey: player.playerKey,
+                deckCount: getDeckCount(room),
                 status: room.status,
                 joinMode: 'match'
             });
@@ -525,7 +667,7 @@ function startGame(roomId) {
 
     room.board = {};
     // 起点卡四个方向都通
-    room.board['0,0'] = { type: 'start', name: '梯', dirs: [1, 1, 1, 1], faceUp: true };
+    room.board[coordKey(START_COORD.x, START_COORD.y)] = { type: 'start', name: '梯', dirs: [1, 1, 1, 1], faceUp: true };
 
     let goals = [
         { type: 'goal', faceUp: false, isTreasure: true, name: '终点' },
@@ -533,7 +675,9 @@ function startGame(roomId) {
         { type: 'goal', faceUp: false, isTreasure: false, name: '终点' }
     ];
     goals = shuffle(goals);
-    room.board['8,-2'] = goals[0]; room.board['8,0'] = goals[1]; room.board['8,2'] = goals[2];
+    GOAL_COORDS.forEach((goalCoord, index) => {
+        room.board[coordKey(goalCoord.x, goalCoord.y)] = goals[index];
+    });
 
     room.deck = [];
     // 普通道路卡：按预设数量分布精确生成 40 张
@@ -600,12 +744,14 @@ function startGame(roomId) {
             board: room.board,
             round: room.round,
             scores: room.scores,
+            deckCount: getDeckCount(room),
             status: room.status
         });
     });
 
     room.currentPlayerIndex = 0;
     io.to(roomId).emit('turnUpdated', { currentTurnId: players[room.currentPlayerIndex].id });
+    emitDeckCount(roomId);
 }
 
 io.on('connection', (socket) => {
@@ -777,6 +923,7 @@ io.on('connection', (socket) => {
             roomId,
             isHost: true,
             playerKey: hostPlayer.playerKey,
+            deckCount: getDeckCount(nextRoom),
             status: nextRoom.status,
             joinMode: 'create'
         });
@@ -855,6 +1002,7 @@ io.on('connection', (socket) => {
             roomId,
             isHost: room.hostId === joiningPlayer.playerKey,
             playerKey: joiningPlayer.playerKey,
+            deckCount: getDeckCount(room),
             status: room.status,
             joinMode: 'join'
         });
@@ -1042,6 +1190,7 @@ io.on('connection', (socket) => {
             player.hand = player.hand.filter(c => c.id !== card.id);
             if (room.deck.length > 0) player.hand.push(room.deck.pop());
             socket.emit('handUpdated', { yourHand: player.hand });
+            emitDeckCount(roomId);
 
             // 行动牌使用后直接轮到下一位
             room.currentPlayerIndex = (room.currentPlayerIndex + 1) % players.length;
@@ -1050,56 +1199,34 @@ io.on('connection', (socket) => {
         }
 
         // 下面是道路牌逻辑
-        const coord = `${targetX},${targetY}`;
+        const coord = coordKey(targetX, targetY);
 
         // 工具被破坏时不能铺路
         if (player.tools && (player.tools.cart === false || player.tools.lantern === false || player.tools.pickaxe === false)) {
             socket.emit('errorMsg', '你的工具被破坏了，暂时不能铺路！');
             return;
         }
-        if (room.board[coord]) { socket.emit('errorMsg', '位置被占用了！'); return; }
-
-        // --- 核心：连通性判定算法 ---
-        const targetDirs = card.dirs; // 新卡的四个接口 [上, 右, 下, 左]
-        const neighbors = {
-            top: room.board[`${targetX},${targetY - 1}`],
-            right: room.board[`${targetX + 1},${targetY}`],
-            bottom: room.board[`${targetX},${targetY + 1}`],
-            left: room.board[`${targetX - 1},${targetY}`]
-        };
-
-        let hasNeighbor = false;
-        let validMatch = true;
-        let connectToPath = false;
-
-        // 检查上方邻居 (它的下接口 dirs[2] 必须和我的上接口 dirs[0] 匹配)
-        if (neighbors.top && neighbors.top.dirs) {
-            hasNeighbor = true;
-            if (neighbors.top.dirs[2] !== targetDirs[0]) validMatch = false;
-            if (neighbors.top.dirs[2] === 1 && targetDirs[0] === 1) connectToPath = true;
+        const placementResult = evaluatePathPlacement(room.board, targetX, targetY, card.dirs);
+        if (!placementResult.ok) {
+            if (placementResult.reason === 'out-of-bounds') {
+                socket.emit('errorMsg', '超出棋盘范围！只能在起点上下各 2 排、终点前 7 列内铺路。');
+                return;
+            }
+            if (placementResult.reason === 'occupied') {
+                socket.emit('errorMsg', '位置被占用了！');
+                return;
+            }
+            if (placementResult.reason === 'mismatch') {
+                socket.emit('errorMsg', '放不进去！管道接口对不上！');
+                return;
+            }
+            if (placementResult.reason === 'not-reachable-from-start') {
+                socket.emit('errorMsg', '这张牌必须接到从起点延伸出来的有效通路上！');
+                return;
+            }
+            socket.emit('errorMsg', '违章建筑！必须挨着已有的卡牌放！');
+            return;
         }
-        // 检查右侧邻居 (它的左接口 dirs[3] 必须和我的右接口 dirs[1] 匹配)
-        if (neighbors.right && neighbors.right.dirs) {
-            hasNeighbor = true;
-            if (neighbors.right.dirs[3] !== targetDirs[1]) validMatch = false;
-            if (neighbors.right.dirs[3] === 1 && targetDirs[1] === 1) connectToPath = true;
-        }
-        // 检查下方邻居 (它的上接口 dirs[0] 必须和我的下接口 dirs[2] 匹配)
-        if (neighbors.bottom && neighbors.bottom.dirs) {
-            hasNeighbor = true;
-            if (neighbors.bottom.dirs[0] !== targetDirs[2]) validMatch = false;
-            if (neighbors.bottom.dirs[0] === 1 && targetDirs[2] === 1) connectToPath = true;
-        }
-        // 检查左侧邻居 (它的右接口 dirs[1] 必须和我的左接口 dirs[3] 匹配)
-        if (neighbors.left && neighbors.left.dirs) {
-            hasNeighbor = true;
-            if (neighbors.left.dirs[1] !== targetDirs[3]) validMatch = false;
-            if (neighbors.left.dirs[1] === 1 && targetDirs[3] === 1) connectToPath = true;
-        }
-
-        if (!hasNeighbor) { socket.emit('errorMsg', '违章建筑！必须挨着已有的卡牌放！'); return; }
-        if (!validMatch) { socket.emit('errorMsg', '放不进去！管道接口对不上！'); return; }
-        if (!connectToPath) { socket.emit('errorMsg', '死路！你必须至少连接一条现有的通路！'); return; }
 
         // 校验通过，放牌！
         room.board[coord] = { type: card.type, name: card.name, dirs: card.dirs, rotation: card.rotation || 0, faceUp: true };
@@ -1147,6 +1274,7 @@ io.on('connection', (socket) => {
 
         io.to(roomId).emit('boardUpdated', room.board);
         socket.emit('handUpdated', { yourHand: player.hand });
+        emitDeckCount(roomId);
     });
 
     /*
@@ -1214,12 +1342,14 @@ io.on('connection', (socket) => {
         if (allHandsEmpty) {
             finishRound(roomId, 'Saboteur', '所有牌已耗尽，未能挖到宝藏！【破坏者】阵营获胜！');
             socket.emit('handUpdated', { yourHand: player.hand });
+            emitDeckCount(roomId);
             return;
         }
 
         room.currentPlayerIndex = (room.currentPlayerIndex + 1) % players.length;
         io.to(roomId).emit('turnUpdated', { currentTurnId: players[room.currentPlayerIndex].id });
         socket.emit('handUpdated', { yourHand: player.hand });
+        emitDeckCount(roomId);
     });
 
     socket.on('disconnect', () => {

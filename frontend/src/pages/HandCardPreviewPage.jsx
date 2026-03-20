@@ -1,10 +1,14 @@
 import React from 'react';
 import {
     getCardArt,
+    getCompactCardName,
+    getDisplayedDirs,
+    getDisplayedDirsKey,
     getDirsKey,
     getTheme,
     inferCardKind,
 } from '../components/handCardArt';
+import RouteMarker from '../components/RouteMarker';
 
 const PREVIEW_GROUPS = [
     {
@@ -73,48 +77,76 @@ function PreviewCard({ card }) {
     const theme = getTheme(cardKind);
     const art = getCardArt(card);
     const isPath = card.type === 'path';
-    const glyph = card.previewGlyph || card.name || '牌';
     const dirsKey = getDirsKey(card);
+    const displayedDirs = getDisplayedDirs(card);
+    const displayedDirsKey = getDisplayedDirsKey(card);
+    const compactName = getCompactCardName(card);
 
     return (
         <div className="rounded-3xl border border-amber-400/20 bg-stone-950/80 p-4 shadow-[0_15px_45px_rgba(0,0,0,0.35)] backdrop-blur-sm">
             <div className="flex flex-col gap-4 sm:flex-row">
                 <div className={`relative h-48 w-32 shrink-0 overflow-hidden rounded-2xl border-2 bg-stone-950 shadow-[0_10px_24px_rgba(0,0,0,0.45)] ${theme.border}`}>
                     <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/15 via-transparent to-black/40 pointer-events-none" />
-                    <div className="relative z-20 mt-2 px-2">
-                        <h3 className="text-center text-sm font-bold leading-tight text-white">
+                    <div className="absolute left-2 top-2 z-20 max-w-[72%] rounded-full border border-white/10 bg-black/70 px-2 py-1 shadow-lg backdrop-blur-sm">
+                        <div className="truncate text-[10px] font-bold tracking-[0.08em] text-stone-100">
+                            {compactName}
+                        </div>
+                        <div className="truncate text-[9px] text-stone-300">
                             {card.name}
-                        </h3>
+                        </div>
                     </div>
 
-                    <div className="relative z-10 mx-1.5 mb-1 mt-2 h-[8.7rem] overflow-hidden rounded-xl border border-white/10 bg-stone-900/70">
+                    <div className="absolute inset-[0.32rem] z-10 overflow-hidden rounded-[0.9rem] border border-white/10 bg-stone-900/70">
                         <img
                             src={art.src}
                             alt={card.name}
                             className="h-full w-full object-cover"
                             style={{
-                                transform: `rotate(${art.rotation || 0}deg) scale(${art.showLargeGlyph ? 1.04 : 1.12})`,
+                                transform: `rotate(${art.rotation || 0}deg) scale(${art.showLargeGlyph ? 1.02 : 1.08})`,
                             }}
                         />
 
                         {isPath && art.showLargeGlyph && (
                             <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="text-5xl font-black leading-none text-amber-300" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}>
-                                    {glyph}
-                                </span>
+                                <RouteMarker
+                                    dirs={displayedDirs}
+                                    deadEnd={cardKind === 'dead-end'}
+                                    size={62}
+                                    className="bg-black/55 backdrop-blur-sm"
+                                />
                             </div>
                         )}
 
-                        {isPath && !art.showLargeGlyph && (
-                            <div className="absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-1 text-sm font-black text-amber-200 shadow-lg">
-                                {glyph}
-                            </div>
-                        )}
-                    </div>
+                        <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/88 via-black/48 to-transparent px-2 pb-2 pt-8">
+                            <div className="flex items-end justify-between gap-2">
+                                {isPath ? (
+                                    <div className="rounded-2xl border border-white/10 bg-black/70 px-1.5 py-1 shadow-lg backdrop-blur-sm">
+                                        <div className="flex items-center gap-1.5">
+                                            <RouteMarker
+                                                dirs={displayedDirs}
+                                                deadEnd={cardKind === 'dead-end'}
+                                                size={24}
+                                            />
+                                            <div className="min-w-0">
+                                                <div className="truncate text-[8px] font-bold tracking-[0.12em] text-amber-100">
+                                                    真实路线
+                                                </div>
+                                                <div className="font-mono text-[8px] text-stone-300">
+                                                    {displayedDirsKey || '----'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="rounded-full border border-white/10 bg-black/70 px-2 py-1 text-[8px] font-bold tracking-[0.12em] text-stone-100 shadow-lg backdrop-blur-sm">
+                                        {card.name}
+                                    </div>
+                                )}
 
-                    <div className="z-20 px-2 pb-2">
-                        <div className={`${theme.labelBg} rounded py-1 text-center`}>
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-white/85">{theme.label}</span>
+                                <div className={`${theme.labelBg} rounded-full border border-white/10 px-2 py-1 text-[8px] font-bold tracking-[0.14em] text-white/90 shadow-lg`}>
+                                    {theme.label}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -138,6 +170,10 @@ function PreviewCard({ card }) {
                         <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
                             <div className="text-xs uppercase tracking-[0.25em] text-stone-400">Dirs</div>
                             <div className="mt-1 break-all font-mono text-base text-amber-200">{dirsKey || '-'}</div>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                            <div className="text-xs uppercase tracking-[0.25em] text-stone-400">Shown</div>
+                            <div className="mt-1 break-all font-mono text-base text-emerald-200">{displayedDirsKey || '-'}</div>
                         </div>
                         <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
                             <div className="text-xs uppercase tracking-[0.25em] text-stone-400">Image</div>

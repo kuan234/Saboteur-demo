@@ -3,11 +3,70 @@ import React, { useState, useRef } from 'react';
 const GRID_COLS = 9;
 const GRID_ROWS = 5;
 const START_POS = { x: 0, y: 2 };
+const SERVER_START_POS = { x: 0, y: 0 };
+const BOARD_MIN_X = 0;
+const BOARD_MAX_X = GRID_COLS - 1;
+const BOARD_MIN_Y = -2;
+const BOARD_MAX_Y = 2;
 const GOAL_POSITIONS = [
     { x: 8, y: 0 },
     { x: 8, y: 2 },
     { x: 8, y: 4 },
 ];
+const CARD_DIRECTIONS = [
+    { dx: 0, dy: -1, from: 0, to: 2 },
+    { dx: 1, dy: 0, from: 1, to: 3 },
+    { dx: 0, dy: 1, from: 2, to: 0 },
+    { dx: -1, dy: 0, from: 3, to: 1 },
+];
+
+const coordKey = (x, y) => `${x},${y}`;
+const hasPathDirs = (card) => Array.isArray(card?.dirs) && card.dirs.length === 4;
+const rotateDirs180 = (dirs = []) => (
+    Array.isArray(dirs) && dirs.length === 4 ? [dirs[2], dirs[3], dirs[0], dirs[1]] : dirs
+);
+const isWithinBoardBounds = (x, y) => (
+    Number.isInteger(x)
+    && Number.isInteger(y)
+    && x >= BOARD_MIN_X
+    && x <= BOARD_MAX_X
+    && y >= BOARD_MIN_Y
+    && y <= BOARD_MAX_Y
+);
+
+const getReachablePathCoords = (board = {}) => {
+    const visited = new Set();
+    const startKey = coordKey(SERVER_START_POS.x, SERVER_START_POS.y);
+    const startCard = board[startKey];
+    if (!hasPathDirs(startCard)) {
+        return visited;
+    }
+
+    const queue = [startKey];
+    visited.add(startKey);
+
+    while (queue.length > 0) {
+        const currentKey = queue.shift();
+        const [x, y] = currentKey.split(',').map(Number);
+        const currentCard = board[currentKey];
+        if (!hasPathDirs(currentCard)) continue;
+
+        CARD_DIRECTIONS.forEach(({ dx, dy, from, to }) => {
+            if (currentCard.dirs[from] !== 1) return;
+
+            const nextKey = coordKey(x + dx, y + dy);
+            const nextCard = board[nextKey];
+            if (!hasPathDirs(nextCard) || nextCard.dirs[to] !== 1 || visited.has(nextKey)) {
+                return;
+            }
+
+            visited.add(nextKey);
+            queue.push(nextKey);
+        });
+    }
+
+    return visited;
+};
 
 // Path symbol rendering for placed cards
 const PathSymbol = ({ name, rotated }) => {
@@ -143,6 +202,7 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
 
     const isValidPlacement = (x, y) => {
         const cell = getCellContent(x, y);
+        const targetServerY = y - 2;
 
         // If we are dragging an action card that acts on the board:
         if (draggingCard && draggingCard.type === 'action') {
@@ -157,7 +217,32 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
 
         // Standard Path card logic
         if (cell) return false; // Cannot place a path where there is already a card
-        return !!(getCellContent(x + 1, y) || getCellContent(x - 1, y) || getCellContent(x, y + 1) || getCellContent(x, y - 1));
+        if (!draggingCard?.dirs || !isWithinBoardBounds(x, targetServerY)) return false;
+
+        const targetDirs = draggingRotation ? rotateDirs180(draggingCard.dirs) : draggingCard.dirs;
+        const reachable = getReachablePathCoords(serverBoard);
+        let hasNeighbor = false;
+        let validMatch = true;
+        let connectsToReachablePath = false;
+
+        CARD_DIRECTIONS.forEach(({ dx, dy, from, to }) => {
+            const neighborKey = coordKey(x + dx, targetServerY + dy);
+            const neighbor = serverBoard?.[neighborKey];
+
+            if (!hasPathDirs(neighbor)) return;
+
+            hasNeighbor = true;
+            if (neighbor.dirs[to] !== targetDirs[from]) {
+                validMatch = false;
+                return;
+            }
+
+            if (neighbor.dirs[to] === 1 && targetDirs[from] === 1 && reachable.has(neighborKey)) {
+                connectsToReachablePath = true;
+            }
+        });
+
+        return hasNeighbor && validMatch && connectsToReachablePath;
     };
 
     const handleDragOver = (e, x, y) => {

@@ -237,6 +237,7 @@ export function SocketProvider({ children }) {
     const [myRole, setMyRole] = useState(null);
     const [hand, setHand] = useState([]);
     const [board, setBoard] = useState({});
+    const [deckCount, setDeckCount] = useState(0);
     const [currentTurnId, setCurrentTurnId] = useState(null);
     const [round, setRound] = useState(1);
     const [scores, setScores] = useState({});
@@ -360,6 +361,7 @@ export function SocketProvider({ children }) {
         setMyRole(null);
         setHand([]);
         setBoard({});
+        setDeckCount(0);
         setCurrentTurnId(null);
         setRound(1);
         setScores({});
@@ -428,6 +430,7 @@ export function SocketProvider({ children }) {
             setPlayerKey(data.playerKey);
             setIsHost(Boolean(data.isHost));
             setGameActive(Boolean(data.status && data.status !== 'waiting'));
+            setDeckCount(Number(data.deckCount || 0));
             setRoundResult(null);
             setGameOverResult(null);
             setMapResult(null);
@@ -476,6 +479,7 @@ export function SocketProvider({ children }) {
             setRoomId(data.roomId);
             setPlayerKey(data.playerKey);
             setIsHost(Boolean(data.isHost));
+            setDeckCount(Number(data.deckCount || 0));
             saveStoredRoomSession({
                 roomId: data.roomId,
                 playerKey: data.playerKey,
@@ -488,6 +492,7 @@ export function SocketProvider({ children }) {
             setMyRole(data.yourRole || null);
             setHand(data.yourHand || []);
             setBoard(data.board || {});
+            setDeckCount(Number(data.deckCount || 0));
             setRound(data.round || 1);
             setScores(data.scores || {});
             setRoundResult(null);
@@ -514,6 +519,7 @@ export function SocketProvider({ children }) {
             setMyRole(data.yourRole || null);
             setHand(data.yourHand || []);
             setBoard(data.board || {});
+            setDeckCount(Number(data.deckCount || 0));
             setRound(data.round || 1);
             setScores(data.scores || {});
             setCurrentTurnId(data.currentTurnId || null);
@@ -535,6 +541,10 @@ export function SocketProvider({ children }) {
 
         socket.on('handUpdated', (data) => {
             setHand(data.yourHand || []);
+        });
+
+        socket.on('deckCountUpdated', (data) => {
+            setDeckCount(Number(data?.deckCount || 0));
         });
 
         socket.on('turnUpdated', (data) => {
@@ -832,6 +842,7 @@ export function SocketProvider({ children }) {
         myRole,
         hand,
         board,
+        deckCount,
         currentTurnId,
         round,
         scores,

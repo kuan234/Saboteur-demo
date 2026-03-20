@@ -89,6 +89,20 @@ export const getDirsKey = (card) => (
 
 const countOpenDirs = (dirsKey) => dirsKey.split('').filter((dir) => dir === '1').length;
 
+export const rotateDirs180 = (dirs = []) => (
+    Array.isArray(dirs) && dirs.length === 4 ? [dirs[2], dirs[3], dirs[0], dirs[1]] : dirs
+);
+
+export const getDisplayedDirs = (card, isRotated = false) => {
+    const dirs = Array.isArray(card?.dirs) && card.dirs.length === 4 ? card.dirs : [];
+    return isRotated ? rotateDirs180(dirs) : dirs;
+};
+
+export const getDisplayedDirsKey = (card, isRotated = false) => {
+    const dirs = getDisplayedDirs(card, isRotated);
+    return Array.isArray(dirs) && dirs.length === 4 ? dirs.join('') : '';
+};
+
 export const inferCardKind = (card) => {
     const name = String(card?.name || '').toLowerCase();
     const desc = String(card?.description || '').toLowerCase();
@@ -190,3 +204,28 @@ export const getCardHint = (card, cardKind) => {
     return `放置 ${card.name}`;
 };
 
+export const getCompactCardName = (card) => {
+    const cardKind = inferCardKind(card);
+    const dirsKey = getDirsKey(card);
+    const openCount = countOpenDirs(dirsKey);
+
+    if (cardKind === 'break') return '破坏';
+    if (cardKind === 'repair') return '修理';
+    if (cardKind === 'map') return '地图';
+    if (cardKind === 'rockfall') return '落石';
+
+    if (cardKind === 'dead-end') {
+        if (dirsKey === '0000') return '全堵';
+        if (openCount === 1) return '单口堵';
+        if (dirsKey === '1010' || dirsKey === '0101') return '双通堵';
+        if (openCount === 3) return '三叉堵';
+        return '堵路';
+    }
+
+    if (dirsKey === '1111') return '十字';
+    if (dirsKey === '1010' || dirsKey === '0101') return '直路';
+    if (openCount === 3) return '三叉';
+    if (openCount === 2) return '拐角';
+    if (openCount === 1) return '单口';
+    return card?.name || '道路';
+};
