@@ -8,6 +8,103 @@ const RTC_CONFIG = {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
 };
 
+function getSupportedAudioConstraints() {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getSupportedConstraints) {
+        return {};
+    }
+
+    return navigator.mediaDevices.getSupportedConstraints();
+}
+
+function buildPreferredMicConstraints() {
+    const supported = getSupportedAudioConstraints();
+    const audio = {};
+
+    if (supported.echoCancellation) {
+        audio.echoCancellation = { ideal: true };
+    }
+    if (supported.noiseSuppression) {
+        audio.noiseSuppression = { ideal: true };
+    }
+    if (supported.autoGainControl) {
+        audio.autoGainControl = { ideal: true };
+    }
+    if (supported.channelCount) {
+        audio.channelCount = { ideal: 1 };
+    }
+    if (supported.sampleRate) {
+        audio.sampleRate = { ideal: 48000 };
+    }
+    if (supported.sampleSize) {
+        audio.sampleSize = { ideal: 16 };
+    }
+    if (supported.latency) {
+        audio.latency = { ideal: 0.02 };
+    }
+    if (supported.voiceIsolation) {
+        audio.voiceIsolation = true;
+    }
+
+    if (!Object.keys(audio).length) {
+        audio.echoCancellation = true;
+        audio.noiseSuppression = true;
+        audio.autoGainControl = true;
+    }
+
+    return { audio, video: false };
+}
+
+async function getPreferredMicrophoneStream() {
+    const preferredConstraints = buildPreferredMicConstraints();
+
+    try {
+        return await navigator.mediaDevices.getUserMedia(preferredConstraints);
+    } catch (error) {
+        if (preferredConstraints.audio === true) {
+            throw error;
+        }
+
+        return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    }
+}
+
+async function optimizeMicrophoneTrack(stream) {
+    const [track] = stream?.getAudioTracks?.() || [];
+    if (!track) return stream;
+
+    if ('contentHint' in track) {
+        track.contentHint = 'speech';
+    }
+
+    if (typeof track.applyConstraints === 'function') {
+        const supported = getSupportedAudioConstraints();
+        const trackConstraints = {};
+
+        if (supported.echoCancellation) {
+            trackConstraints.echoCancellation = true;
+        }
+        if (supported.noiseSuppression) {
+            trackConstraints.noiseSuppression = true;
+        }
+        if (supported.autoGainControl) {
+            trackConstraints.autoGainControl = true;
+        }
+        if (supported.voiceIsolation) {
+            trackConstraints.voiceIsolation = true;
+        }
+
+        if (Object.keys(trackConstraints).length) {
+            try {
+                await track.applyConstraints(trackConstraints);
+            } catch {
+                // Ignore browsers that expose the API but reject voice-processing toggles.
+            }
+        }
+    }
+
+    return stream;
+}
+
 const STORAGE_KEYS = {
     username: 'saboteur_username',
     roomId: 'saboteur_room_id',
@@ -218,6 +315,7 @@ export function SocketProvider({ children }) {
             if (!audio) {
                 audio = new Audio();
                 audio.autoplay = true;
+                audio.playsInline = true;
                 remoteAudiosRef.current.set(targetId, audio);
             }
             const [stream] = event.streams;
@@ -675,7 +773,8 @@ export function SocketProvider({ children }) {
         }
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            const stream = await getPreferredMicrophoneStream();
+            await optimizeMicrophoneTrack(stream);
             localStreamRef.current = stream;
             setMicEnabled(true);
             setVoiceError('');

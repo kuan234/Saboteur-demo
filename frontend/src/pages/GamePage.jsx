@@ -546,7 +546,7 @@ export default function GamePage() {
                                         </button>
                                     </div>
                                     <div className="text-[11px] text-stone-400">
-                                        弱网时建议使用聊天页快捷语句，避免语音中断影响协作。
+                                        已优先开启回声消除与语音优化；如果双方都开外放，仍建议佩戴耳机以减少串音。
                                     </div>
                                 </div>
                             )}
