@@ -63,23 +63,23 @@ export const DEAD_END_THEME = {
 
 export const ACTION_THEMES = {
     break: {
-        border: 'border-red-700',
-        label: '\u884c\u52a8\u724c',
-        labelBg: 'bg-red-800/80',
+        border: 'border-red-600',
+        label: '\u7834\u574f\u724c',
+        labelBg: 'bg-red-700/85',
     },
     repair: {
-        border: 'border-blue-700',
-        label: '\u884c\u52a8\u724c',
-        labelBg: 'bg-blue-800/80',
+        border: 'border-cyan-500',
+        label: '\u4fee\u7406\u724c',
+        labelBg: 'bg-cyan-700/85',
     },
     map: {
         border: 'border-purple-700',
-        label: '\u884c\u52a8\u724c',
+        label: '\u5730\u56fe\u724c',
         labelBg: 'bg-purple-800/80',
     },
     rockfall: {
         border: 'border-orange-700',
-        label: '\u884c\u52a8\u724c',
+        label: '\u843d\u77f3\u724c',
         labelBg: 'bg-orange-800/80',
     },
 };

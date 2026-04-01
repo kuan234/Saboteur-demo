@@ -5,6 +5,7 @@ import HandCards from '../components/HandCards';
 import PlayerBar from '../components/PlayerBar';
 import InfoPanel from '../components/InfoPanel';
 import ChatBox from '../components/ChatBox';
+import RoleRevealModal from '../components/RoleRevealModal';
 
 const rotateDirs180 = (dirs = []) => {
     if (!Array.isArray(dirs) || dirs.length !== 4) return dirs;
@@ -40,6 +41,8 @@ const quickEmojiMessages = [
     '这条路可疑 🤨',
 ];
 
+const ROLE_REVEAL_AUTO_CLOSE_SECONDS = 10;
+
 export default function GamePage() {
     const {
         players, currentTurnId, socketId,
@@ -47,7 +50,7 @@ export default function GamePage() {
         logs, chatMessages, sendChat, myRole,
         mapResult, roundResult, gameOverResult, clearRoundResult, clearGameOver,
         speakerEnabled, micEnabled, voiceError, toggleSpeaker, toggleMic,
-        isHost, requestRematch, round, deckCount
+        isHost, requestRematch, round, deckCount, roleRevealKey
     } = useSocket();
 
     const [draggingCard, setDraggingCard] = useState(null);
@@ -60,6 +63,9 @@ export default function GamePage() {
     const [turnSecondsLeft, setTurnSecondsLeft] = useState(20);
     const [tutorialOpen, setTutorialOpen] = useState(false);
     const [tutorialStep, setTutorialStep] = useState(0);
+    const [pendingRoleReveal, setPendingRoleReveal] = useState(false);
+    const [roleRevealOpen, setRoleRevealOpen] = useState(false);
+    const [roleRevealCountdown, setRoleRevealCountdown] = useState(ROLE_REVEAL_AUTO_CLOSE_SECONDS);
     const [eventBanner, setEventBanner] = useState('');
     const [actionPulse, setActionPulse] = useState(false);
     const [showAllMobileLogs, setShowAllMobileLogs] = useState(false);
@@ -71,8 +77,12 @@ export default function GamePage() {
     const currentPlayer = safePlayers.find(p => p.id === currentTurnId);
     const selectedCard = safeHand.find(card => card.id === selectedCardId) || null;
     const isMyTurn = currentTurnId === socketId;
-    const roleLabel = myRole === 'Gold Miner' ? '淘金者' : '破坏者';
-    const actionPrompt = `身份: ${roleLabel}`;
+    const roleLabel = myRole === 'Gold Miner'
+        ? '\u6dd8\u91d1\u8005'
+        : myRole === 'Saboteur'
+            ? '\u7834\u574f\u8005'
+            : '\u672a\u77e5';
+    const actionPrompt = myRole ? `\u8eab\u4efd: ${roleLabel}` : '\u8eab\u4efd\u5f85\u63ed\u793a';
     const actionHint = draggingCard
         ? '拖放道路到网格，破坏/修复牌拖到玩家头像'
         : '选择一张手牌开始行动';
@@ -117,6 +127,36 @@ export default function GamePage() {
             localStorage.setItem('saboteur_tutorial_seen_count', String(currentCount + 1));
         }
     }, []);
+
+    useEffect(() => {
+        if (!roleRevealKey || !myRole) return;
+        setPendingRoleReveal(true);
+    }, [myRole, roleRevealKey]);
+
+    useEffect(() => {
+        if (!pendingRoleReveal || roundResult || gameOverResult || !myRole) return;
+        setRoleRevealOpen(true);
+        setRoleRevealCountdown(ROLE_REVEAL_AUTO_CLOSE_SECONDS);
+        setPendingRoleReveal(false);
+        setMobileDrawerOpen(false);
+    }, [gameOverResult, myRole, pendingRoleReveal, roundResult]);
+
+    useEffect(() => {
+        if (!roleRevealOpen) return undefined;
+
+        setRoleRevealCountdown(ROLE_REVEAL_AUTO_CLOSE_SECONDS);
+        const countdownTimer = window.setInterval(() => {
+            setRoleRevealCountdown(prev => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+        const closeTimer = window.setTimeout(() => {
+            setRoleRevealOpen(false);
+        }, ROLE_REVEAL_AUTO_CLOSE_SECONDS * 1000);
+
+        return () => {
+            window.clearInterval(countdownTimer);
+            window.clearTimeout(closeTimer);
+        };
+    }, [roleRevealKey, roleRevealOpen]);
 
     useEffect(() => {
         if (!socketId) return;
@@ -584,7 +624,16 @@ export default function GamePage() {
                 </div>
             </div>
 
-            {tutorialOpen && (
+            {roleRevealOpen && (
+                <RoleRevealModal
+                    role={myRole}
+                    round={round}
+                    countdown={roleRevealCountdown}
+                    onClose={() => setRoleRevealOpen(false)}
+                />
+            )}
+
+            {tutorialOpen && !roleRevealOpen && !pendingRoleReveal && (
                 <div className="fixed inset-0 z-[95] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" data-testid="tutorial-modal">
                     <div className="w-full max-w-sm rounded-2xl border border-amber-500/50 bg-stone-900 p-4">
                         <h3 className="text-amber-400 font-bold text-lg mb-1">新手引导</h3>
@@ -703,4 +752,3 @@ export default function GamePage() {
         </div>
     );
 }
-

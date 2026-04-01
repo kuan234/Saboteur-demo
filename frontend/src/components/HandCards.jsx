@@ -8,13 +8,29 @@ import {
     getTheme,
     inferCardKind,
 } from './handCardArt';
+import ActionToolBadge, { getActionToolLabel, getActionTools } from './ActionToolBadge';
 import RouteMarker from './RouteMarker';
+
+const UI_TEXT = {
+    rotate: '\u65cb\u8f6c',
+    discard: '\u5f03\u724c',
+    discardTitle: '\u5f03\u724c\u4ee5\u8df3\u8fc7\u56de\u5408',
+    route: '\u771f\u5b9e\u8def\u7ebf',
+    fallbackAlt: 'card',
+};
 
 const calculateCardTransform = (index, totalCards) => {
     if (totalCards <= 1) return { rotation: 0 };
     const maxRotation = totalCards <= 3 ? 8 : 12;
     const normalizedIndex = (index - (totalCards - 1) / 2) / ((totalCards - 1) / 2 || 1);
     return { rotation: normalizedIndex * maxRotation };
+};
+
+const getActionDetailText = (card, cardKind) => {
+    if (cardKind === 'break' || cardKind === 'repair') {
+        return getActionToolLabel(card);
+    }
+    return String(card?.name || '');
 };
 
 const HandCard = ({
@@ -41,6 +57,10 @@ const HandCard = ({
     const compactName = getCompactCardName(card);
     const displayedDirs = getDisplayedDirs(card, isRotated);
     const displayedDirsKey = getDisplayedDirsKey(card, isRotated);
+    const actionTools = getActionTools(card);
+    const hasActionBadge = actionTools.length > 0;
+    const visibleName = getActionDetailText(card, cardKind) || compactName;
+    const showVisibleName = Boolean(visibleName) && visibleName !== compactName;
     const [rotationFlash, setRotationFlash] = useState(false);
     const didMountRef = useRef(false);
 
@@ -57,15 +77,19 @@ const HandCard = ({
     }, [isPath, isRotated]);
 
     const cardImageRotation = (cardArt.rotation || 0) + (isPath && isRotated ? 180 : 0);
+    const titlePillClass = hasActionBadge
+        ? (isMobile ? 'left-2 top-2 max-w-[54%]' : 'left-10 top-1.5 max-w-[44%]')
+        : (isMobile ? 'left-2 top-2 max-w-[70%]' : 'left-10 top-1.5 max-w-[55%]');
 
     return (
         <div
-            className="relative flex justify-center items-end"
+            className="relative flex items-end justify-center"
             data-testid={`hand-card-${cardId}`}
             data-card-type={card.type || 'unknown'}
             data-card-kind={cardKind}
             data-card-name={String(card.name || '')}
             data-card-dirs={getDirsKey(card)}
+            data-card-tools={actionTools.join(',')}
             data-card-rotated={isRotated ? 'true' : 'false'}
             style={{
                 transform: `rotate(${isMobile ? 0 : (isHovered ? 0 : rotation)}deg) translateY(${selected ? -10 : (isHovered ? -10 : 0)}px)`,
@@ -96,7 +120,7 @@ const HandCard = ({
                                 onToggleRotation?.(cardId);
                             }}
                         >
-                            🔁 旋转
+                            {`\u21bb ${UI_TEXT.rotate}`}
                         </button>
                     )}
                     <button
@@ -108,21 +132,29 @@ const HandCard = ({
                             onDiscard?.(card);
                         }}
                     >
-                        🗑️ 弃牌
+                        {`\u2715 ${UI_TEXT.discard}`}
                     </button>
                 </div>
             )}
 
             <div
-                className={`w-20 h-32 sm:w-24 sm:h-36 md:w-32 md:h-48 lg:w-36 lg:h-52 rounded-xl overflow-hidden cursor-grab active:cursor-grabbing border-2 shadow-[0_6px_20px_rgba(0,0,0,0.7)] ${selected ? 'border-amber-300 shadow-[0_0_22px_rgba(251,191,36,0.6)]' : (isHovered ? 'border-amber-400' : theme.border)} flex flex-col relative bg-stone-950`}
+                className={`relative flex h-32 w-20 cursor-grab flex-col overflow-hidden rounded-xl border-2 bg-stone-950 shadow-[0_6px_20px_rgba(0,0,0,0.7)] active:cursor-grabbing sm:h-36 sm:w-24 md:h-48 md:w-32 lg:h-52 lg:w-36 ${selected ? 'border-amber-300 shadow-[0_0_22px_rgba(251,191,36,0.6)]' : (isHovered ? 'border-amber-400' : theme.border)}`}
                 data-testid={`hand-card-face-${cardId}`}
             >
-                <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/15 via-transparent to-black/40 pointer-events-none" />
+                <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-black/15 via-transparent to-black/40" />
 
                 {isPath && isRotated && (
                     <div className="absolute right-1.5 top-1.5 z-20 rounded-full border border-amber-300/60 bg-amber-600/90 px-1.5 py-0.5 text-[9px] font-black tracking-wide text-white shadow-lg">
-                        旋转
+                        {UI_TEXT.rotate}
                     </div>
+                )}
+
+                {!isPath && hasActionBadge && (
+                    <ActionToolBadge
+                        card={card}
+                        className="absolute right-1.5 top-1.5 z-20"
+                        data-testid={`action-tool-badge-${cardId}`}
+                    />
                 )}
 
                 {!isMobile && (
@@ -134,27 +166,29 @@ const HandCard = ({
                                 event.stopPropagation();
                                 onDiscard?.(card);
                             }}
-                            title="弃牌以跳过回合"
+                            title={UI_TEXT.discardTitle}
                         >
-                            <span className="text-[10px] font-bold">✕</span>
+                            <span className="text-[10px] font-bold">{'\u2715'}</span>
                         </button>
                     </div>
                 )}
 
-                <div className={`absolute z-20 rounded-full border border-white/10 bg-black/70 px-2 py-1 shadow-lg backdrop-blur-sm ${isMobile ? 'left-2 top-2 max-w-[70%]' : 'left-10 top-1.5 max-w-[55%]'}`}>
+                <div className={`absolute z-20 rounded-full border border-white/10 bg-black/70 px-2 py-1 shadow-lg backdrop-blur-sm ${titlePillClass}`}>
                     <div className="truncate text-[9px] font-bold tracking-[0.08em] text-stone-100 md:text-[10px]">
                         {compactName}
                     </div>
-                    <div className="truncate text-[8px] text-stone-300">
-                        {card.name}
-                    </div>
+                    {showVisibleName && (
+                        <div className="truncate text-[8px] text-stone-300">
+                            {visibleName}
+                        </div>
+                    )}
                 </div>
 
                 <div className="absolute inset-[0.32rem] z-10 overflow-hidden rounded-[0.9rem] border border-white/10 bg-stone-900/70">
                     <img
                         src={cardArt.src}
-                        alt={String(card.name || 'card')}
-                        className="h-full w-full select-none object-cover pointer-events-none"
+                        alt={visibleName || String(card.name || UI_TEXT.fallbackAlt)}
+                        className="pointer-events-none h-full w-full select-none object-cover"
                         draggable={false}
                         style={{
                             transform: `rotate(${cardImageRotation}deg) scale(${cardArt.showLargeGlyph ? 1.02 : 1.1})`,
@@ -186,7 +220,7 @@ const HandCard = ({
                                         />
                                         <div className="min-w-0">
                                             <div className="truncate text-[8px] font-bold tracking-[0.12em] text-amber-100 md:text-[9px]">
-                                                真实路线
+                                                {UI_TEXT.route}
                                             </div>
                                             <div className="font-mono text-[8px] text-stone-300 md:text-[9px]">
                                                 {displayedDirsKey || '----'}
@@ -196,7 +230,7 @@ const HandCard = ({
                                 </div>
                             ) : (
                                 <div className="rounded-full border border-white/10 bg-black/70 px-2 py-1 text-[8px] font-bold tracking-[0.12em] text-stone-100 shadow-lg backdrop-blur-sm md:text-[9px]">
-                                    {card.name}
+                                    {visibleName || compactName}
                                 </div>
                             )}
 
@@ -205,7 +239,6 @@ const HandCard = ({
                             </div>
                         </div>
                     </div>
-
                 </div>
             </div>
         </div>

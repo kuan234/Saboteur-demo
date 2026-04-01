@@ -235,6 +235,7 @@ export function SocketProvider({ children }) {
 
     const [gameActive, setGameActive] = useState(false);
     const [myRole, setMyRole] = useState(null);
+    const [roleRevealKey, setRoleRevealKey] = useState(0);
     const [hand, setHand] = useState([]);
     const [board, setBoard] = useState({});
     const [deckCount, setDeckCount] = useState(0);
@@ -490,6 +491,7 @@ export function SocketProvider({ children }) {
         socket.on('gameStarted', (data) => {
             setGameActive(true);
             setMyRole(data.yourRole || null);
+            setRoleRevealKey(prev => prev + 1);
             setHand(data.yourHand || []);
             setBoard(data.board || {});
             setDeckCount(Number(data.deckCount || 0));
@@ -840,6 +842,7 @@ export function SocketProvider({ children }) {
         leaveMatchQueue,
         gameActive,
         myRole,
+        roleRevealKey,
         hand,
         board,
         deckCount,
