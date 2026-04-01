@@ -153,8 +153,8 @@ function getRoleDeck(playerCount) {
     let saboteurs = 0, miners = 0;
     if (playerCount === 2) { saboteurs = 1; miners = 2; }
     else if (playerCount === 3) { saboteurs = 1; miners = 3; }
-    else if (playerCount === 4) { saboteurs = 1; miners = 4; }
-    else if (playerCount === 5) { saboteurs = 2; miners = 4; }
+    else if (playerCount === 4) { saboteurs = 1; miners = 3; }
+    else if (playerCount === 5) { saboteurs = 2; miners = 3; }
     else if (playerCount === 6) { saboteurs = 2; miners = 5; }
     else if (playerCount === 7) { saboteurs = 3; miners = 5; }
     else if (playerCount === 8) { saboteurs = 3; miners = 6; }
@@ -663,7 +663,7 @@ function startGame(roomId) {
         player.tools = { cart: true, lantern: true, pickaxe: true };
         touchPlayer(player);
     });
-    room.setAsideRoleCard = roleDeck.pop();
+    room.setAsideRoleCard = roleDeck.length > 0 ? roleDeck.pop() : null;
 
     room.board = {};
     // 起点卡四个方向都通
@@ -720,8 +720,9 @@ function startGame(roomId) {
         }
     });
 
-    // C. 地图牌 Map（6）
-    for (let i = 0; i < 6; i++) {
+    // C. 地图牌 Map（2-3 人 2 张，4-6 人 3 张，其余人数维持 6 张）
+    const mapCardCount = playerCount <= 3 ? 2 : playerCount <= 6 ? 3 : 6;
+    for (let i = 0; i < mapCardCount; i++) {
         pushAction({ type: 'action', subType: 'map', name: '地图' });
     }
 
