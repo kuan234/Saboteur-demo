@@ -1,18 +1,14 @@
-import React, { useState, useRef } from 'react';
+import React, { useRef, useState } from 'react';
+import { getCardArt, inferCardKind } from './handCardArt';
+import RouteMarker from './RouteMarker';
 
 const GRID_COLS = 9;
 const GRID_ROWS = 5;
-const START_POS = { x: 0, y: 2 };
 const SERVER_START_POS = { x: 0, y: 0 };
 const BOARD_MIN_X = 0;
 const BOARD_MAX_X = GRID_COLS - 1;
 const BOARD_MIN_Y = -2;
 const BOARD_MAX_Y = 2;
-const GOAL_POSITIONS = [
-    { x: 8, y: 0 },
-    { x: 8, y: 2 },
-    { x: 8, y: 4 },
-];
 const CARD_DIRECTIONS = [
     { dx: 0, dy: -1, from: 0, to: 2 },
     { dx: 1, dy: 0, from: 1, to: 3 },
@@ -68,18 +64,41 @@ const getReachablePathCoords = (board = {}) => {
     return visited;
 };
 
-// Path symbol rendering for placed cards
-const PathSymbol = ({ name, rotated }) => {
-    const symbols = {
-        '╋': '╋', '┃': '┃', '━': '━',
-        '┳': '┳', '┻': '┻', '┣': '┣', '┫': '┫',
-        '┏': '┏', '┓': '┓', '┗': '┗', '┛': '┛',
-        '直道': '┃', '十字路口': '╋',
-    };
+const PathCardFace = ({ card, isPreview = false }) => {
+    if (!hasPathDirs(card)) return null;
+
+    const cardKind = inferCardKind(card);
+    const cardArt = getCardArt(card);
+    const cardImageRotation = cardArt.rotation || 0;
+
     return (
-        <span className={`text-amber-400 text-2xl font-bold drop-shadow-[0_0_6px_rgba(245,158,11,0.8)] ${rotated ? 'rotate-180 inline-block' : ''}`}>
-            {symbols[name] || name || '┃'}
-        </span>
+        <div className={`relative h-full w-full overflow-hidden rounded-md ${isPreview ? 'border border-amber-500/50 bg-amber-900/20' : 'border-2 border-amber-800/80 shadow-[0_2px_6px_rgba(0,0,0,0.6)] animate-card-stamp'}`}>
+            <div className="absolute inset-[0.16rem] overflow-hidden rounded-[0.42rem] border border-white/10 bg-stone-900/75">
+                <img
+                    src={cardArt.src}
+                    alt={String(card.name || 'path')}
+                    className="h-full w-full select-none object-cover pointer-events-none"
+                    draggable={false}
+                    style={{
+                        transform: `rotate(${cardImageRotation}deg) scale(${cardArt.showLargeGlyph ? 1.02 : 1.08})`,
+                        transition: 'transform 0.28s ease, opacity 0.18s ease',
+                    }}
+                />
+
+                {cardArt.showLargeGlyph && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <RouteMarker
+                            dirs={card.dirs}
+                            deadEnd={cardKind === 'dead-end'}
+                            size={42}
+                            className="bg-black/55 backdrop-blur-sm"
+                        />
+                    </div>
+                )}
+
+                <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/35 pointer-events-none" />
+            </div>
+        </div>
     );
 };
 
@@ -105,14 +124,14 @@ const BoardCard = ({ data }) => {
             : '/assets/card_back_default_1772908397043.png';
 
         return (
-            <div className={`w-full h-full rounded-md border-2 relative overflow-hidden transition-all duration-500
-        ${data.revealed
+            <div
+                className={`w-full h-full rounded-md border-2 relative overflow-hidden transition-all duration-500 ${data.revealed
                     ? 'border-yellow-400 shadow-[0_0_20px_rgba(234,179,8,0.8)]'
                     : 'border-stone-500 shadow-[0_0_8px_rgba(168,85,247,0.4)]'
-                }`}>
+                    }`}
+            >
                 <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${goalImg})` }} />
 
-                {/* Optional glow overlay if revealed */}
                 {data.revealed && data.isTreasure && (
                     <div className="absolute inset-0 bg-yellow-500/20 mix-blend-overlay pointer-events-none animate-glow-pulse" />
                 )}
@@ -120,20 +139,13 @@ const BoardCard = ({ data }) => {
         );
     }
 
-    // Normal path card using dirt texture
-    const dirtImg = '/assets/texture_dirt_1772909600159.png';
     return (
-        <div className="w-full h-full rounded-md border-2 border-amber-800/80 shadow-[0_2px_6px_rgba(0,0,0,0.6)] flex items-center justify-center relative overflow-hidden animate-card-stamp">
-            <div className="absolute inset-0 bg-cover bg-center opacity-80" style={{ backgroundImage: `url(${dirtImg})` }} />
-            <div className="absolute inset-0 bg-black/30 pointer-events-none" />
-            <span
-                className="relative z-10 text-amber-400 font-bold"
-                style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.9)' }}
-                data-board-rotated={isRotated ? 'true' : 'false'}
-                data-board-rotation={String(rotation)}
-            >
-                <PathSymbol name={data.name} rotated={isRotated} />
-            </span>
+        <div
+            className="w-full h-full"
+            data-board-rotated={isRotated ? 'true' : 'false'}
+            data-board-rotation={String(rotation)}
+        >
+            <PathCardFace card={data} />
         </div>
     );
 };
@@ -196,7 +208,6 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
 
     const getCellContent = (x, y) => {
         if (!serverBoard) return null;
-        // Server Y = GameBoard Y - 2
         return serverBoard[`${x},${y - 2}`];
     };
 
@@ -204,19 +215,17 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
         const cell = getCellContent(x, y);
         const targetServerY = y - 2;
 
-        // If we are dragging an action card that acts on the board:
         if (draggingCard && draggingCard.type === 'action') {
             if (draggingCard.subType === 'map') {
-                return cell && cell.type === 'goal'; // Can only drop Map on Goal
+                return cell && cell.type === 'goal';
             }
             if (draggingCard.subType === 'rockfall') {
-                return cell && cell.type === 'path'; // Can only drop rockfall on placed paths
+                return cell && cell.type === 'path';
             }
-            return false; // Other action cards (sabotage/repair) drop on players
+            return false;
         }
 
-        // Standard Path card logic
-        if (cell) return false; // Cannot place a path where there is already a card
+        if (cell) return false;
         if (!draggingCard?.dirs || !isWithinBoardBounds(x, targetServerY)) return false;
 
         const targetDirs = draggingRotation ? rotateDirs180(draggingCard.dirs) : draggingCard.dirs;
@@ -257,11 +266,9 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
         setHoveredCell(null);
         if (!draggingCard) return;
         if (isValidPlacement(x, y)) {
-            // Let GamePage / Socket handle the real placement
             if (onDropCard) onDropCard(draggingCard, { x, y }, draggingRotation);
         }
     };
-
 
     const getTouchDistance = (touches) => {
         if (!touches || touches.length < 2) return 0;
@@ -369,11 +376,12 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
                     onDrop={(e) => handleDrop(e, c, r)}
                 >
                     {cellData && <BoardCard data={cellData} />}
-                    {!cellData && isHov && valid && draggingCard && (
-                        <div className="absolute inset-0 rounded-md opacity-50 pointer-events-none">
-                            <div className={`w-full h-full rounded-md bg-amber-800/40 border border-amber-500/50 flex items-center justify-center ${draggingRotation ? 'rotate-180' : ''}`}>
-                                <span className="text-amber-400/60 text-xl">┃</span>
-                            </div>
+                    {!cellData && isHov && valid && draggingCard?.type === 'path' && (
+                        <div className="absolute inset-0 rounded-md opacity-55 pointer-events-none">
+                            <PathCardFace
+                                card={draggingRotation ? { ...draggingCard, dirs: rotateDirs180(draggingCard.dirs) } : draggingCard}
+                                isPreview
+                            />
                         </div>
                     )}
                     {!cellData && isHov && !valid && draggingCard && (
@@ -388,7 +396,6 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
 
     return (
         <div className="relative w-full h-full flex items-center justify-center" data-testid="game-board-shell">
-            {/* Dirt / Earth textured board background */}
             <div
                 ref={boardViewportRef}
                 className="relative w-[98%] sm:w-[94%] md:w-[80%] lg:w-[70%] max-w-[900px] aspect-[6/5] rounded-xl md:rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.9),inset_0_0_80px_rgba(0,0,0,0.6)]"
@@ -412,23 +419,28 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
                         transition: gestureRef.current.mode ? 'none' : 'transform 120ms ease-out',
                     }}
                 >
-                    {/* Inner dirt texture overlay */}
-                    <div className="absolute inset-0 opacity-20 pointer-events-none"
-                        style={{ background: 'repeating-conic-gradient(#2a1f14 0% 25%, #1e1610 0% 50%) 0 0 / 30px 30px' }} />
+                    <div
+                        className="absolute inset-0 opacity-20 pointer-events-none"
+                        style={{ background: 'repeating-conic-gradient(#2a1f14 0% 25%, #1e1610 0% 50%) 0 0 / 30px 30px' }}
+                    />
 
-                    {/* The Grid */}
                     <div className="absolute inset-2 sm:inset-4 md:inset-6 lg:inset-8 flex items-center justify-center">
-                        <div className="grid gap-1.5 w-full h-full"
-                            style={{ gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${GRID_ROWS}, minmax(0, 1fr))` }}>
+                        <div
+                            className="grid gap-1.5 w-full h-full"
+                            style={{
+                                gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
+                                gridTemplateRows: `repeat(${GRID_ROWS}, minmax(0, 1fr))`,
+                            }}
+                        >
                             {cells}
                         </div>
                     </div>
                 </div>
 
                 <div className="absolute top-2 right-2 z-20 flex gap-1 md:hidden">
-                    <button onClick={() => applyScale(scaleRef.current - 0.1)} className="w-7 h-7 rounded bg-black/70 border border-stone-500 text-stone-200 text-sm">－</button>
+                    <button onClick={() => applyScale(scaleRef.current - 0.1)} className="w-7 h-7 rounded bg-black/70 border border-stone-500 text-stone-200 text-sm">-</button>
                     <button onClick={() => { applyScale(1); applyOffset({ x: 0, y: 0 }, 1); }} className="px-2 h-7 rounded bg-black/70 border border-stone-500 text-stone-200 text-[10px] font-bold">100%</button>
-                    <button onClick={() => applyScale(scaleRef.current + 0.1)} className="w-7 h-7 rounded bg-black/70 border border-stone-500 text-stone-200 text-sm">＋</button>
+                    <button onClick={() => applyScale(scaleRef.current + 0.1)} className="w-7 h-7 rounded bg-black/70 border border-stone-500 text-stone-200 text-sm">+</button>
                 </div>
 
                 {mobileScale > 1.01 && !draggingCard && (
@@ -437,7 +449,6 @@ export default function GameBoard({ draggingCard, draggingRotation, onDropCard, 
                     </div>
                 )}
 
-                {/* Rotation hint */}
                 {draggingCard && (
                     <div className="pointer-events-none absolute bottom-3 left-3 bg-black/70 text-amber-500 text-xs px-3 py-1.5 rounded-lg border border-amber-800/50 animate-glow-pulse font-bold">
                         当前选中卡牌 ({draggingRotation ? '已旋转' : '未旋转'})
